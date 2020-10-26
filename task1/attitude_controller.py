@@ -58,9 +58,9 @@ class Edrone():
 
         # initial setting of Kp, Kd and ki for [roll, pitch, yaw]. eg: self.Kp[2] corresponds to Kp value in yaw axis
         # after tuning and computing corresponding PID parameters, change the parameters
-        self.Kp = [61.56, 0.0, 0.0]
+        self.Kp = [49.8, 38.64, 0.0]
         self.Ki = [0.0, 0.0, 0.0]
-        self.Kd = [327.6, 0.0, 0.0]
+        self.Kd = [340.5, 553.2, 0.0]
         # -----------------------Add other required variables for pid here ----------------------------------------------
         #
         self.ouput                  = [0.0, 0.0, 0.0]
@@ -175,14 +175,15 @@ class Edrone():
         
         self.out_roll,self.out_pitch,self.out_yaw = self.ouput
         
-        self.pwm_cmd.prop1 = max(min(self.out_roll - self.out_pitch + self.out_yaw + self.throttle, self.max_values[0]), self.min_values[0])
-        self.pwm_cmd.prop2 = max(min(-self.out_roll - self.out_pitch - self.out_yaw + self.throttle, self.max_values[1]), self.min_values[1])
-        self.pwm_cmd.prop3 = max(min(-self.out_roll + self.out_pitch + self.out_yaw + self.throttle, self.max_values[2]), self.min_values[2])
-        self.pwm_cmd.prop4 = max(min(self.out_roll + self.out_pitch - self.out_yaw + self.throttle, self.max_values[3]), self.min_values[3])
+        self.pwm_cmd.prop1 = max(min(+self.out_roll - self.out_pitch - self.out_yaw + self.throttle, self.max_values[0]), self.min_values[0])
+        self.pwm_cmd.prop2 = max(min(-self.out_roll - self.out_pitch + self.out_yaw + self.throttle, self.max_values[1]), self.min_values[1])
+        self.pwm_cmd.prop3 = max(min(-self.out_roll + self.out_pitch - self.out_yaw + self.throttle, self.max_values[2]), self.min_values[2])
+        self.pwm_cmd.prop4 = max(min(+self.out_roll + self.out_pitch + self.out_yaw + self.throttle, self.max_values[3]), self.min_values[3])
         # self.pwm_cmd.prop1 = self.setpoint_cmd[0]
         # self.pwm_cmd.prop2 = 512
         # self.pwm_cmd.prop3 = 512
         # self.pwm_cmd.prop4 = 512
+        rospy.loginfo(self.ouput)
         rospy.loginfo(self.out_roll)
         self.yaw_error_pub.publish(self.out_yaw)
         self.pitch_error_pub.publish(self.out_pitch)
