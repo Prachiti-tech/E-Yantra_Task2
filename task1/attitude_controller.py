@@ -9,7 +9,6 @@ This node publishes and subsribes the following topics:
         /yaw_error              /pid_tuning_roll
         /edrone/pwm             /edrone/imu/data
                                 /edrone/drone_command
-
 Rather than using different variables, use list. eg : self.setpoint = [1,2,3], where index corresponds to x,y,z ...rather than defining self.x_setpoint = 1, self.y_setpoint = 2
 CODE MODULARITY AND TECHNIQUES MENTIONED LIKE THIS WILL HELP YOU GAINING MORE MARKS WHILE CODE EVALUATION.
 '''
@@ -90,9 +89,9 @@ class Edrone():
         # Subscribing to /drone_command, imu/data, /pid_tuning_roll, /pid_tuning_pitch, /pid_tuning_yaw
         rospy.Subscriber('/drone_command', edrone_cmd, self.drone_command_callback)
         rospy.Subscriber('/edrone/imu/data', Imu, self.imu_callback)
-        rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)
+        #rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)
         # -------------------------Add other ROS Subscribers here----------------------------------------------------
-        rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)
+        #rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)
         rospy.Subscriber('/pid_tuning_yaw', PidTune, self.yaw_set_pid)
         # ------------------------------------------------------------------------------------------------------------
 
@@ -115,9 +114,9 @@ class Edrone():
     # Callback function for /pid_tuning_roll
     # This function gets executed each time when /tune_pid publishes /pid_tuning_roll
     def roll_set_pid(self, roll):
-        self.Kp[0] = roll.Kp * 0.06  # This is just for an example. You can change the ratio/fraction value accordingly
+        self.Kp[0] = roll.Kp * 100  # This is just for an example. You can change the ratio/fraction value accordingly
         self.Ki[0] = roll.Ki * 0.008
-        self.Kd[0] = roll.Kd * 0.3
+        self.Kd[0] = roll.Kd * 1
 
     # ----------------------------Define callback function like roll_set_pid to tune pitch, yaw--------------
     def pitch_set_pid(self, pitch):
@@ -126,9 +125,9 @@ class Edrone():
         self.Kd[1] = pitch.Kd * 0.3
 
     def yaw_set_pid(self, yaw):
-        self.Kp[2] = yaw.Kp * 0.06  # This is just for an example. You can change the ratio/fraction value accordingly
+        self.Kp[2] = yaw.Kp * 100  # This is just for an example. You can change the ratio/fraction value accordingly
         self.Ki[2] = yaw.Ki * 0.008
-        self.Kd[2] = yaw.Kd * 0.3
+        self.Kd[2] = yaw.Kd * 100
 
     # ----------------------------------------------------------------------------------------------------------------------
 
@@ -160,7 +159,7 @@ class Edrone():
         # Also convert the range of 1000 to 2000 to 0 to 1024 for throttle here itslef
         if self.throttle >= 1000.0 and self.throttle<=2000.0:
             self.throttle = (self.throttle-1000)*1.023
-        
+
         for i in range (3):
             self.error[i] = self.setpoint_euler[i] - self.drone_orientation_euler[i]
             self.cummulative_error[i] += self.error[i]
@@ -172,9 +171,9 @@ class Edrone():
 
         for i in range(3):
             self.previous_error[i] = self.error[i]
-        
+
         self.out_roll,self.out_pitch,self.out_yaw = self.ouput
-        
+
         self.pwm_cmd.prop1 = max(min(+self.out_roll - self.out_pitch - self.out_yaw + self.throttle, self.max_values[0]), self.min_values[0])
         self.pwm_cmd.prop2 = max(min(-self.out_roll - self.out_pitch + self.out_yaw + self.throttle, self.max_values[1]), self.min_values[1])
         self.pwm_cmd.prop3 = max(min(-self.out_roll + self.out_pitch - self.out_yaw + self.throttle, self.max_values[2]), self.min_values[2])
