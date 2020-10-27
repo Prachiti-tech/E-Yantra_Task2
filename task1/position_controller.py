@@ -31,13 +31,13 @@ class Edrone():
 
         self.location = NavSatFix()
         self.drone_cmd = edrone_cmd()
-        self.target_altitude = 5.0
-        self.target_longitude = 72.0001
-        self.target_latitude = 19.0001
+        self.target_altitude = 3.0
+        self.target_longitude =  72.0
+        self.target_latitude = 19.0000451704
         #Longitude, Latitude , Throttle
-        self.Kp = [0.0, 0.0, 1082*0.06]
+        self.Kp = [0.06*1000*156, 1223* 0.06*1000, 1082*0.06]
         self.Ki = [0.0, 0.0, 0.0*0.008]
-        self.Kd = [0.0, 0.0, 4476*0.3]
+        self.Kd = [0.3*10000*873, 2102*0.3*10000, 4476*0.3]
         # -----------------------Add other required variables for pid here ----------------------------------------------
         #
         self.error                  = [0.0, 0.0, 0.0]
@@ -60,6 +60,8 @@ class Edrone():
         # -----------------------------------------------------------------------------------------------------------
         rospy.Subscriber('/edrone/gps',NavSatFix, self.drone_command_callback)
         rospy.Subscriber('/pid_tuning_altitude', PidTune, self.altitude_set_pid)
+        rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)
+        rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)
 
     def drone_command_callback(self, msg):
         self.location.altitude = msg.altitude
@@ -72,6 +74,15 @@ class Edrone():
         self.Ki = alt.Ki * 0.008
         self.Kd = alt.Kd * 0.3
 
+    def roll_set_pid(self, roll):
+        self.Kp[0] = roll.Kp * 0.06*1000  # This is just for an example. You can change the ratio/fraction value accordingly
+        self.Ki[0] = roll.Ki * 0.008*1000
+        self.Kd[0] = roll.Kd * 0.3*10000
+
+    def pitch_set_pid(self, pitch):
+        self.Kp[1] = pitch.Kp * 0.06*1000  # This is just for an example. You can change the ratio/fraction value accordingly
+        self.Ki[1] = pitch.Ki * 0.008*1000
+        self.Kd[1] = pitch.Kd * 0.3*10000
     # ----------------------------------------------------------------------------------------------------------------------
 
     def pid(self):
@@ -81,27 +92,40 @@ class Edrone():
         for i in range(3):
             self.cummulative_error[i] += self.error[i]
             if abs(self.cummulative_error[i]) >= self.max_cummulative_error[i]:
+        
                 self.cummulative_error[i] = 0.0
+        
         for i in range(3):
             self.ouput[i] = self.Kp[i] * self.error[i] + self.Ki[i] * self.cummulative_error[i] + self.Kd[i] *(self.error[i]-self.previous_error[i])
+        
+        if self.location.altitude>self.target_altitude-0.1 and self.location.altitude<self.target_altitude+0.1 :
+            if round(self.previous_error[2],2) == round(self.error[2],2) and round(0.2,2)>abs(self.error[2]):
+                # long ---> fwd_bwd ---> roll
+                # lat ----> right_left
+                self.drone_cmd.rcRoll = 1500 - self.ouput[0]
+                self.drone_cmd.rcPitch = 1500 - self.ouput[1]
+        else :
+            self.drone_cmd.rcRoll = 1500
+            self.drone_cmd.rcPitch = 1500
+        
+
+        for i in range(3):
             self.previous_error[i] = self.error[i]
 
         if self.error[2]>=-0.001:
             self.drone_cmd.rcThrottle = 1500 - self.ouput[2]
         elif self.error[2]<0.0 :
             self.drone_cmd.rcThrottle = 1500 - self.ouput[2]
+        
 
-        self.drone_cmd.rcPitch = 1500 - self.ouput[1]
-        self.drone_cmd.rcRoll = 1500 - self.ouput[0]
         self.drone_cmd.rcYaw = 1500
-        rospy.loginfo(self.error)
+        rospy.loginfo(self.ouput)
         rospy.loginfo(self.drone_cmd)
         self.drone_pub.publish(self.drone_cmd)
         self.long_error.publish(self.error[0])
         self.lat_error.publish(self.error[1])
         self.alt_error.publish(self.error[2])
         self.zero_error.publish(0.0)
-
 
 if __name__ == '__main__':
 
