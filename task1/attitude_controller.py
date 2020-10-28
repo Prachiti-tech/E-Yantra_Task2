@@ -73,7 +73,7 @@ class Edrone():
         self.out_roll               = 0.0
         self.out_yaw                = 0.0
         self.out_pitch              = 0.0
-        self.throttle               = 1000.0
+        self.throttle               = 0.0
         # ----------------------------------------------------------------------------------------------------------
 
         # # This is the sample time in which you need to run pid. Choose any time which you seem fit. Remember the stimulation step time is 50 ms
@@ -109,7 +109,7 @@ class Edrone():
         self.setpoint_cmd[0] = msg.rcRoll
         self.setpoint_cmd[1] = msg.rcPitch
         self.setpoint_cmd[2] = msg.rcYaw
-        self.throttle = msg.rcThrottle
+        self.throttle        = msg.rcThrottle
         # ---------------------------------------------------------------------------------------------------------------
 
     # Callback function for /pid_tuning_roll

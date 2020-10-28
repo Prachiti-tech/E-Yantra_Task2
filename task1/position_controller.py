@@ -29,15 +29,15 @@ class Edrone():
     def __init__(self):
         rospy.init_node('position_controller')  # initializing ros node with name drone_control
 
-        self.location = NavSatFix()
-        self.drone_cmd = edrone_cmd()
-        self.target_altitude = 3.0
-        self.target_longitude =  72.0
-        self.target_latitude = 19.0000451704
+        self.location               = NavSatFix()
+        self.drone_cmd              = edrone_cmd()
+        self.target_altitude        = 0.31
+        self.target_longitude       = 72.0
+        self.target_latitude        = 19.0
         #Longitude, Latitude , Throttle
-        self.Kp = [0.06*1000*156, 1223* 0.06*1000, 1082*0.06]
-        self.Ki = [0.0, 0.0, 0.0*0.008]
-        self.Kd = [0.3*10000*873, 2102*0.3*10000, 4476*0.3]
+        self.Kp                     = [0.06*1000*156, 1223* 0.06*1000, 1082*0.06]
+        self.Ki                     = [0.0,           0.0,             0.0*0.008]
+        self.Kd                     = [0.3*10000*873, 2102*0.3*10000,  4476*0.3 ]
         # -----------------------Add other required variables for pid here ----------------------------------------------
         #
         self.error                  = [0.0, 0.0, 0.0]
@@ -45,11 +45,17 @@ class Edrone():
         self.cummulative_error      = [0.0, 0.0, 0.0]
         self.previous_error         = [0.0, 0.0, 0.0]
         self.max_cummulative_error  = [1000, 1000, 1000]
-        self.throttle               = 0
+        self.throttle               = 1500
+        # ----------------------------------------------------------------------------------------------------------
+        self.is_reached_altitude    = False
+        self.is_reached_lat_long    = False
+        self.allowed_long_error     = 0.000004517
+        self.allowed_lat_error      = 0.0000047487
+        # ----------------------------------------------------------------------------------------------------------
         # ----------------------------------------------------------------------------------------------------------
 
         # # This is the sample time in which you need to run pid. Choose any time which you seem fit. Remember the stimulation step time is 50 ms
-        self.sample_time = 0.060  # in seconds
+        self.sample_time            = 0.060  # in seconds
 
         # Publishing /edrone/pwm, /roll_error, /pitch_error, /yaw_error
         self.drone_pub = rospy.Publisher('/drone_command', edrone_cmd, queue_size=1)
@@ -62,6 +68,7 @@ class Edrone():
         rospy.Subscriber('/pid_tuning_altitude', PidTune, self.altitude_set_pid)
         rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)
         rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)
+        rospy.Subscriber('/edrone/target',NavSatFix, self.check)
 
     def drone_command_callback(self, msg):
         self.location.altitude = msg.altitude
@@ -99,15 +106,19 @@ class Edrone():
             self.ouput[i] = self.Kp[i] * self.error[i] + self.Ki[i] * self.cummulative_error[i] + self.Kd[i] *(self.error[i]-self.previous_error[i])
         
         if self.location.altitude>self.target_altitude-0.1 and self.location.altitude<self.target_altitude+0.1 :
-            if round(self.previous_error[2],2) == round(self.error[2],2) and round(0.2,2)>abs(self.error[2]):
-                # long ---> fwd_bwd ---> roll
-                # lat ----> right_left
-                self.drone_cmd.rcRoll = 1500 - self.ouput[0]
-                self.drone_cmd.rcPitch = 1500 - self.ouput[1]
+            self.is_reached_altitude = True
         else :
             self.drone_cmd.rcRoll = 1500
             self.drone_cmd.rcPitch = 1500
         
+        if self.is_reached_altitude:
+                # lat ----> right_left
+                self.drone_cmd.rcRoll = 1500 - self.ouput[0]
+                self.drone_cmd.rcPitch = 1500 - self.ouput[1]
+
+        if round(abs(self.error[0]),9) <= self.allowed_long_error and round(abs(self.error[1]),10)<= self.allowed_lat_error:
+            self.is_reached_lat_long = True
+
 
         for i in range(3):
             self.previous_error[i] = self.error[i]
@@ -126,6 +137,13 @@ class Edrone():
         self.lat_error.publish(self.error[1])
         self.alt_error.publish(self.error[2])
         self.zero_error.publish(0.0)
+
+    def check(self,msg):
+        if self.is_reached_lat_long:
+            self.target_altitude        = msg.altitude
+            self.target_longitude       = msg.longitude
+            self.target_latitude        = msg.latitude
+
 
 if __name__ == '__main__':
 
