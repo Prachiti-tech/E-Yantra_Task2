@@ -83,11 +83,17 @@ class Edrone():
         self.cummulative_error      = [0.0, 0.0, 0.0]
         self.previous_error         = [0.0, 0.0, 0.0]
         self.max_cummulative_error  = [1000, 1000, 1000]
-        self.throttle               = 0
+        self.throttle               = 1500
+        # ----------------------------------------------------------------------------------------------------------
+        self.is_reached_altitude    = False
+        self.is_reached_lat_long    = False
+        self.allowed_long_error     = 0.000004517
+        self.allowed_lat_error      = 0.0000047487
+        # ----------------------------------------------------------------------------------------------------------
         # ----------------------------------------------------------------------------------------------------------
 
         # # This is the sample time in which you need to run pid. Choose any time which you seem fit. Remember the stimulation step time is 50 ms
-        self.sample_time = 0.060  # in seconds
+        self.sample_time            = 0.060  # in seconds
 
         # Publishing /edrone/pwm, /roll_error, /pitch_error, /yaw_error
         self.drone_pub = rospy.Publisher('/drone_command', edrone_cmd, queue_size=1)
@@ -128,6 +134,7 @@ class Edrone():
         self.Kp[1] = lat.Kp * 0.06*1000  # This is just for an example. You can change the ratio/fraction value accordingly
         self.Ki[1] = lat.Ki * 0.008*1000
         self.Kd[1] = lat.Kd * 0.3*10000
+
     # ----------------------------------------------------------------------------------------------------------------------
 
     def pid(self):
@@ -141,6 +148,7 @@ class Edrone():
             # Cummulative error as sum of previous errors
             self.cummulative_error[i] += self.error[i]
             if abs(self.cummulative_error[i]) >= self.max_cummulative_error[i]:
+
 
                 self.cummulative_error[i] = 0.0
 
@@ -159,9 +167,9 @@ class Edrone():
             self.drone_cmd.rcThrottle = 1500 - self.ouput[2]
         elif self.error[2]<0.0 :
             self.drone_cmd.rcThrottle = 1500 - self.ouput[2]
+        
 
-
-        rospy.loginfo(self.drone_cmd)
+        self.drone_cmd.rcYaw = 1500
 
         #Publishing the Drone commands for R,P,Y of drone
         self.drone_pub.publish(self.drone_cmd)
@@ -171,6 +179,7 @@ class Edrone():
         self.lat_error.publish(self.error[1])
         self.alt_error.publish(self.error[2])
         self.zero_error.publish(0.0)
+
 
     def controller(self):
 

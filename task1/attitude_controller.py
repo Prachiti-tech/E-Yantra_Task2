@@ -9,6 +9,7 @@ This node publishes and subsribes the following topics:
         /yaw_error              /pid_tuning_roll
         /edrone/pwm             /edrone/imu/data
                                 /edrone/drone_command
+
 Rather than using different variables, use list. eg : self.setpoint = [1,2,3], where index corresponds to x,y,z ...rather than defining self.x_setpoint = 1, self.y_setpoint = 2
 CODE MODULARITY AND TECHNIQUES MENTIONED LIKE THIS WILL HELP YOU GAINING MORE MARKS WHILE CODE EVALUATION.
 '''
@@ -72,7 +73,7 @@ class Edrone():
         self.out_roll               = 0.0
         self.out_yaw                = 0.0
         self.out_pitch              = 0.0
-        self.throttle               = 1000.0
+        self.throttle               = 0.0
         # ----------------------------------------------------------------------------------------------------------
 
         # # This is the sample time in which you need to run pid. Choose any time which you seem fit. Remember the stimulation step time is 50 ms
@@ -108,7 +109,7 @@ class Edrone():
         self.setpoint_cmd[0] = msg.rcRoll
         self.setpoint_cmd[1] = msg.rcPitch
         self.setpoint_cmd[2] = msg.rcYaw
-        self.throttle = msg.rcThrottle
+        self.throttle        = msg.rcThrottle
         # ---------------------------------------------------------------------------------------------------------------
 
     # Callback function for /pid_tuning_roll
@@ -159,7 +160,7 @@ class Edrone():
         # Also convert the range of 1000 to 2000 to 0 to 1024 for throttle here itslef
         if self.throttle >= 1000.0 and self.throttle<=2000.0:
             self.throttle = (self.throttle-1000)*1.023
-
+        
         for i in range (3):
             self.error[i] = self.setpoint_euler[i] - self.drone_orientation_euler[i]
             self.cummulative_error[i] += self.error[i]
@@ -173,6 +174,8 @@ class Edrone():
             self.previous_error[i] = self.error[i]
 
         self.out_roll,self.out_pitch,self.out_yaw = self.output
+
+     
 
         self.pwm_cmd.prop1 = max(min(+self.out_roll - self.out_pitch - self.out_yaw + self.throttle, self.max_values[0]), self.min_values[0])
         self.pwm_cmd.prop2 = max(min(-self.out_roll - self.out_pitch + self.out_yaw + self.throttle, self.max_values[1]), self.min_values[1])
