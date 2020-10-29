@@ -58,12 +58,12 @@ class Edrone():
 
         # initial setting of Kp, Kd and ki for [roll, pitch, yaw]. eg: self.Kp[2] corresponds to Kp value in yaw axis
         # after tuning and computing corresponding PID parameters, change the parameters
-        self.Kp = [49.8, 38.64, 0.06*4000]
+        self.Kp = [49.8, 36.9, 0.06*4000]
         self.Ki = [0.0, 0.0, 0.0]
         self.Kd = [340.5, 553.2, 0.3*5000]
         # -----------------------Add other required variables for pid here ----------------------------------------------
         #
-        self.ouput                  = [0.0, 0.0, 0.0]
+        self.output                  = [0.0, 0.0, 0.0]
         self.error                  = [0.0, 0.0, 0.0]
         self.cummulative_error      = [0.0, 0.0, 0.0]
         self.previous_error         = [0.0, 0.0, 0.0]
@@ -168,12 +168,14 @@ class Edrone():
                 self.cummulative_error[i] = 0
 
         for i in range (3):
-            self.ouput[i] = self.Kp[i] * self.error[i] + self.Kd[i] * (self.error[i]-self.previous_error[i]) + self.Ki[i] * self.cummulative_error[i]
+            self.output[i] = self.Kp[i] * self.error[i] + self.Kd[i] * (self.error[i]-self.previous_error[i]) + self.Ki[i] * self.cummulative_error[i]
 
         for i in range(3):
             self.previous_error[i] = self.error[i]
-        
-        self.out_roll,self.out_pitch,self.out_yaw = self.ouput
+
+        self.out_roll,self.out_pitch,self.out_yaw = self.output
+
+     
 
         self.pwm_cmd.prop1 = max(min(+self.out_roll - self.out_pitch - self.out_yaw + self.throttle, self.max_values[0]), self.min_values[0])
         self.pwm_cmd.prop2 = max(min(-self.out_roll - self.out_pitch + self.out_yaw + self.throttle, self.max_values[1]), self.min_values[1])
@@ -183,11 +185,11 @@ class Edrone():
         # self.pwm_cmd.prop2 = 512
         # self.pwm_cmd.prop3 = 512
         # self.pwm_cmd.prop4 = 512
-        rospy.loginfo(self.ouput)
+        rospy.loginfo(self.output)
         rospy.loginfo(self.out_roll)
-        self.yaw_error_pub.publish(self.out_yaw)
-        self.pitch_error_pub.publish(self.out_pitch)
-        self.roll_error_pub.publish(self.out_roll)
+        self.yaw_error_pub.publish(self.error[2])
+        self.pitch_error_pub.publish(self.error[1])
+        self.roll_error_pub.publish(self.error[0])
         self.pwm_pub.publish(self.pwm_cmd)
 
 
