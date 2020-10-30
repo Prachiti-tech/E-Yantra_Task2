@@ -19,13 +19,4 @@
     </p>
 </html>
 
-## Final Submission
-
-<html>
-    <p align="center">
-    <a href="https://www.youtube.com/watch?v=49mRUKnZ2LA">
-        YouTube Video
-    </a>
-    </p>
-</html>
 
