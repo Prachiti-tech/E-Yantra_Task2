@@ -29,10 +29,3 @@
     </p>
 </html>
 
-<html>
-    <p align="center">
-    <a href="https://www.youtube.com/watch?v=49mRUKnZ2LA">
-        <img src="https://img.youtube.com/vi/49mRUKnZ2LA/0.jpg" height="360" width="540"/>
-    </a>
-    </p>
-</html>
