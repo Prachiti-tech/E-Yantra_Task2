@@ -60,7 +60,7 @@ class Edrone():
         self.targets_achieved = 0
 
         #List of targets setpoints [[Longitude, Latitude, Altitude]]
-        self.targets = [
+        self.targets = [    \
                         [72.0, 19.0000000000, 3.00], \
                         [72.0, 19.0000451704, 3.00], \
                         [72.0, 19.0000451704, 0.31]  \
@@ -81,9 +81,10 @@ class Edrone():
         self.base_pwm               = 1500
         # ----------------------------------------------------------------------------------------------------------
 
-        # Allowed errors in long.,and lat.
-        self.allowed_lon_error = 0.0000000487
-        self.allowed_lat_error = 0.00000001704
+        # Allowed errors in long.,and lat.+-0.000004517 in latitude,+-0.0000047487
+        # We are keeping more precision
+        self.allowed_lon_error = 0.0000047487 / 10
+        self.allowed_lat_error = 0.0000045170 / 10
 
         # Time in which PID algorithm runs
         self.pid_break_time = 0.060  # in seconds
@@ -216,7 +217,6 @@ class Edrone():
                 self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
                 self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
                 self.drone_cmd.rcYaw = self.base_pwm
-                self.throttle = 1001.0;
 
 
 if __name__ == '__main__':
