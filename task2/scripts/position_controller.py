@@ -96,27 +96,39 @@ class Edrone():
 
         #List of targets setpoints [[Longitude, Latitude, Altitude]]
         self.targets = [
-                        [72.0, 19.0000271036, 3.00], \
-                        [72.0, 19.000000000, 3.00], \
-                        [72.0, 19.000000000, 1.0]  \
+                        # [71.9998318945, 19.0009248718, 25.1599967919], \
+                        # [71.9998955286, 19.0007046575, 25.1599967919], \
+                        # [71.9998955286, 19.0007046575, 22.1599967919]  \
+                        [72.000,19.000,3],\
+                        [72.000,19.000,3],\
+                        [72.000,19.000,3],\
                        ]
         # Longitude , latitude and altitude
         self.scanned_target = [0.0,0.0,0.0]
         self.range_finder_bottom = 0
         self.bottom_count = 0
         self.offset_alt = 3.00
-        # [1] right, [2] back, [3] left, [0,4] front w.r.t eyantra logo 
+        # [1] right, [2] back, [3] left, [0,4] front w.r.t eyantra logo
         self.range_finder_top_list = [0.0, 0.0, 0.0 ,0.0, 0.0]
         self.x_lat = 0.0
         self.y_long = 0.0
         # Weights for left right
-        self.weights_lr = [10,-10]
+        self.weights_lr = [20,-20]
         # self.Activate = activate()
 
         # Kp, Ki and Kd found out experimentally using PID tune
-        self.Kp = [0.06*1000*156, 1223* 0.06*1000, 1082*0.06]
-        self.Ki = [0.0, 0.0, 0.0*0.008]
-        self.Kd = [0.3*10000*873, 2102*0.3*10000, 4476*0.3]
+        # self.Kp = [0.06*1000*156, 1223* 0.06*1000, 1082*0.06]
+        # self.Ki = [0.0, 0.0, 0.0*0.008]
+        # self.Kd = [0.3*10000*873, 2102*0.3*10000, 4476*0.3]
+
+        #Overshoots to one meter
+        self.Kp = [0.06*1000*156, 1223* 0.06*1000, 2249*0.06]
+        self.Ki = [0.0, 0.0, 66*0.008]
+        self.Kd = [0.3*10000*873, 2102*0.3*10000, 4096*0.3]
+        # self.Kp = [0.06*1000*3*2249, 0.06*1000*3430, 0.06*2249]
+        # self.Ki = [0.008/100000000*459,  0.008/100000000*426, 0.008*66]
+        # self.Kd = [0.3*1000*3*2*2227, 0.3*10000*1705, 0.3*4096]
+
 
         # Output, Error ,Cummulative Error and Previous Error of the PID equation in the form [Long, Lat, Alt]
         self.error                  = [0.0, 0.0, 0.0]
@@ -150,12 +162,12 @@ class Edrone():
 
         # Subscribers for gps co-ordinates, and pid_tune GUI
         rospy.Subscriber('/edrone/gps',NavSatFix, self.gps_callback)
-        rospy.Subscriber('/pid_tuning_altitude', PidTune, self.altitude_set_pid)
-        rospy.Subscriber('/pid_tuning_roll', PidTune, self.long_set_pid)
-        rospy.Subscriber('/pid_tuning_pitch', PidTune, self.lat_set_pid)
+        # rospy.Subscriber('/pid_tuning_altitude', PidTune, self.altitude_set_pid)
+        # rospy.Subscriber('/pid_tuning_roll', PidTune, self.long_set_pid)
+        # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.lat_set_pid)
         rospy.Subscriber('/edrone/location_custom',location_custom,self.scanQR)
         rospy.Subscriber('/edrone/range_finder_bottom',LaserScan,self.range_bottom)
-        rospy.Subscriber('/edrone/range_finder_bottom',LaserScan,self.range_top)
+        rospy.Subscriber('/edrone/range_finder_top',LaserScan,self.range_top)
     # Callback for getting gps co-ordinates
     def gps_callback(self, msg):
         self.location.altitude = msg.altitude
@@ -193,9 +205,10 @@ class Edrone():
     def range_bottom(self , msg):
         self.range_finder_bottom = msg.ranges[0]
         # print(self.range_bottom)
-    
+
     def range_top(self , msg):
         self.range_finder_top_list = msg.ranges
+        print(self.range_finder_top_list)
     # ----------------------------------------------------------------------------------------------------------------------
 
     def pid(self):
@@ -218,6 +231,7 @@ class Edrone():
 
         # Method for checking the error and then changing the target location
         self.controller()
+        self.handle_obstacle_x_y()
 
         # Storing Previous Error values for differential error
         for i in range(3):
@@ -235,17 +249,6 @@ class Edrone():
         self.alt_error.publish(self.error[2])
         self.zero_error.publish(0.0)
 
-    def handle_obstacle_x_y(self):
-        # Sum is -ve for right and +ve for left
-        weighted_lr_sum = self.weights_lr[1]*self.range_finder_top_list[1] + self.weights_lr[0]*self.range_finder_top_list[3]
-        # print weighted_lr_sum
-        if self.range_finder_top_list[0]<10:
-            self.drone_cmd.rcYaw = self.base_pwm - self.range_finder_top_list[0]
-            self.drone_cmd.rcRoll = self.base_pwm - self.range_finder_top_list[0]
-        if abs(weighted_lr_sum)<10:
-            self.drone_cmd.rcYaw = self.base_pwm - weighted_lr_sum
-            self.drone_cmd.rcRoll = self.base_pwm - weighted_lr_sum
-            self.drone_cmd.rcPitch = self.base_pwm - weighted_lr_sum
 
     def controller(self):
 
@@ -288,7 +291,7 @@ class Edrone():
                 print "Reached Altitude. Navigating Around."
                 self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
                 self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
-                self.drone_cmd.rcYaw = self.base_pwm+self.ouput[1]+self.ouput[0]
+                self.drone_cmd.rcYaw = self.base_pwm
                 # self.handle_obstacle_x_y()
                 # long ---> fwd_bwd ---> roll
                 # lat ----> right_left
@@ -300,6 +303,29 @@ class Edrone():
                 self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
                 self.drone_cmd.rcYaw = self.base_pwm
 
+    def handle_obstacle_x_y(self):
+        # Sum is -ve for right and +ve for left
+        weighted_lr_sum = self.weights_lr[1]*self.range_finder_top_list[1] + self.weights_lr[0]*self.range_finder_top_list[3]
+        front_range_finder_avg = (self.range_finder_top_list[0] + self.range_finder_top_list[4])/2
+        # print weighted_lr_sum
+
+        # [1] right, [2] back, [3] left, [0,4] front w.r.t eyantra logo
+        # if self.range_finder_top_list[1]<5:
+        #     self.drone_cmd.rcYaw = self.base_pwm - self.range_finder_top_list[0]
+        #     self.drone_cmd.rcRoll = self.base_pwm + self.range_finder_top_list[0]
+        # if self.range_finder_top_list[3]<5:
+        #     self.drone_cmd.rcYaw = self.base_pwm - self.range_finder_top_list[0]
+        #     self.drone_cmd.rcRoll = self.base_pwm + self.range_finder_top_list[0]
+        if front_range_finder_avg < 2.5:
+            print("In handle XY")
+            self.drone_cmd.rcYaw = self.base_pwm - self.range_finder_top_list[0]
+            self.drone_cmd.rcRoll = self.base_pwm + self.range_finder_top_list[0]
+        if abs(weighted_lr_sum)<2.5:
+            print("In handle XY2")
+            self.drone_cmd.rcYaw = self.base_pwm - weighted_lr_sum
+            # self.drone_cmd.rcRoll = self.base_pwm + weighted_lr_sum
+            self.drone_cmd.rcPitch = self.base_pwm + weighted_lr_sum
+
     def landing_control(self):
         # print(self.scan)
         if self.scan == True :
@@ -310,7 +336,7 @@ class Edrone():
                 self.targets_achieved = 0
                 self.target_refresh()
                 self.bottom_count = 1
-            
+
             # TODO: Gripper code
             # self.Activate.start()
             # gripper = self.Activate.act()
@@ -323,13 +349,13 @@ class Edrone():
             print "Reached Subtarget. Landing to grab parcel."
 
 
-    
+
     def takeoff_control(self):
         #Specifying the values for R,P,Y
         self.drone_cmd.rcRoll = self.base_pwm
         self.drone_cmd.rcPitch = self.base_pwm
         self.drone_cmd.rcYaw = self.base_pwm
-    
+
     def target_refresh(self):
         # Corodinates of 0th new are co-ordinates of last old +- altitude
         self.targets[0][0] = self.targets[2][0]
