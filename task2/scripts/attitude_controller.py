@@ -71,9 +71,9 @@ class Edrone():
         self.pwm_cmd.prop4 = 0.0
 
         # Tuned Kp,Ki,Kd for [roll,pitch,yaw]
-        self.Kp = [49.8, 38.64, 0.0]
-        self.Ki = [0.0, 0.0, 0.0]
-        self.Kd = [340.5, 553.2, 0.0]
+        self.Kp = [49.8, 38.64, 0.06*500*568]
+        self.Ki = [0.0, 0.0, 0.008*57]
+        self.Kd = [340.5, 553.2, 0.3*500*150]
 
         # -----------------------Add other required variables for pid here ----------------------------------------------
 
@@ -152,9 +152,9 @@ class Edrone():
 
     # Callback function for /pid_tuning_yaw
     def yaw_set_pid(self, yaw):
-        # self.Kp[2] = yaw.Kp * 0.06
-        # self.Ki[2] = yaw.Ki * 0.008
-        # self.Kd[2] = yaw.Kd * 0.3
+        self.Kp[2] = yaw.Kp * 0.06* 500
+        self.Ki[2] = yaw.Ki * 0.008
+        self.Kd[2] = yaw.Kd * 0.3 *500
         print("yoo")
 
     # ----------------------------------------------------------------------------------------------------------------------
@@ -167,6 +167,7 @@ class Edrone():
         # Convertng the range from 1000 to 2000 in the range of -10 degree to 10 degree for roll axis
         self.setpoint_euler[0] = self.setpoint_cmd[0] * 0.02 - 30
         self.setpoint_euler[1] = self.setpoint_cmd[1] * 0.02 - 30
+        # self.setpoint_euler[2] = (self.setpoint_cmd[2] -750)*90/1250
         self.setpoint_euler[2] = self.setpoint_cmd[2] * 0.02 - 30
 
         # Converting the range of 1000 to 2000 to 0 to 1024 for throttle
