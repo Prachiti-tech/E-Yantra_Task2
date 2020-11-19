@@ -304,9 +304,11 @@ class Edrone():
                     #setting the flag to 2
                     self.targets_achieved += 1
                     #Specifying the values for R,P,Y
-                    self.drone_cmd.rcRoll = self.base_pwm
-                    self.drone_cmd.rcPitch = self.base_pwm
-                    self.drone_cmd.rcYaw = self.base_pwm
+                    # self.drone_cmd.rcRoll = self.base_pwm
+                    # self.drone_cmd.rcPitch = self.base_pwm
+                    # self.drone_cmd.rcYaw = self.base_pwm
+                    self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
+                    self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
         else :
             if self.targets_achieved == 0  :
                 # print "Taking Off."
@@ -422,7 +424,7 @@ class Edrone():
         PosX,PosY,alt1 = self.targets[0]
         ToX,ToY,alt1 = self.targets[1]
         dist = math.sqrt(pow((110692.0702932625 *(PosX-ToX)),2)+pow((-105292.0089353767 *(PosY-ToY)),2))
-        self.n = int(abs(dist/10))
+        self.n = int(abs(dist)/10)-1
         # self.n = 2
         points = [[0.0,0.0,0.0] for i in range(self.n)]
         x = float(self.n)
