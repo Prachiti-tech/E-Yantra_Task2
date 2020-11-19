@@ -323,6 +323,7 @@ class Edrone():
             elif self.targets_achieved == self.n+1 :
                 self.landing_control()
                 if self.bottom_count>0:
+                    print self.targets
                     print "Final Target reached"
                     None
                 # self.handle_yaw()
@@ -337,12 +338,12 @@ class Edrone():
         # if self.range_finder_top_list[1]<15:
         #     self.drone_cmd.rcYaw = self.base_pwm - self.range_finder_top_list[0]
         #     self.drone_cmd.rcRoll = self.base_pwm + self.range_finder_top_list[0]
-        if self.range_finder_top_list[3]<18:
+        if self.range_finder_top_list[3]<10:
             self.obstacle_count += 1
             self.drone_cmd.rcRoll = self.base_pwm + 10
             self.drone_cmd.rcPitch = self.base_pwm
             self.drone_cmd.rcYaw = self.base_pwm
-        if front_range_finder_avg < 18:
+        if front_range_finder_avg < 10:
             self.obstacle_count += 1
             self.drone_cmd.rcPitch = self.base_pwm - 10
             self.drone_cmd.rcRoll = self.base_pwm
