@@ -10,6 +10,7 @@ import rospy
 import time
 import tf
 import math
+import numpy as np
 # class activate():
 #     def start(self):
 #         rospy.init_node('gripper_service')
@@ -93,7 +94,8 @@ class Edrone():
 
         #Created a flag for changing the setpoints
         self.targets_achieved = 0
-
+        # Check if obstacle was deteceted
+        self.obstacle_count = 0
         #List of targets setpoints [[Longitude, Latitude, Altitude]]
         # self.targets = [
         #                 [72.0, 19.0000271036, 3.00], \
@@ -110,14 +112,15 @@ class Edrone():
         self.range_finder_bottom = 0
         self.bottom_count = 0
         self.offset_alt = 3.00
-        # [1] right, [2] back, [3] left, [0,4] front w.r.t eyantra logo 
+        # [1] right, [2] back, [3] left, [0,4] front w.r.t eyantra logo
         self.range_finder_top_list = [0.0, 0.0, 0.0 ,0.0, 0.0]
         self.x_lat = 0.0
         self.y_long = 0.0
         # Weights for left right
         self.weights_lr = [1.3,-1.3]
         # self.Activate = activate()
-
+        self.n = -1
+        self.points =[]
         # Kp, Ki and Kd found out experimentally using PID tune
         self.Kp = [0.06*1000*156, 1223* 0.06*1000, 1082*0.06]
         self.Ki = [0.0, 0.0, 0.0*0.008]
@@ -134,8 +137,8 @@ class Edrone():
         # ----------------------------------------------------------------------------------------------------------
 
         # Allowed errors in long.,and lat.
-        self.allowed_lon_error = 0.000000487
-        self.allowed_lat_error = 0.0000001704
+        self.allowed_lon_error = 0.000000487*10
+        self.allowed_lat_error = 0.0000001704*10
 
         #Checking if we have to scan or Land
         self.scan = False
@@ -198,7 +201,7 @@ class Edrone():
     def range_bottom(self , msg):
         self.range_finder_bottom = msg.ranges[0]
         # print(self.range_bottom)
-    
+
     def range_top(self , msg):
         self.range_finder_top_list = msg.ranges
 
@@ -217,15 +220,22 @@ class Edrone():
         self.error[0] = self.location.longitude - self.targets[self.targets_achieved][0]
         self.error[1] = self.location.latitude - self.targets[self.targets_achieved][1]
         self.error[2] = self.location.altitude - self.targets[self.targets_achieved][2]
+        # print self.targets
+        # print self.targets_achieved
+        # print self.n
+        # [71.99986371155, 19.00081476465, 25.1599967919], [71.9998955286, 19.0007046575, 25.1599967919]]
+        # [[71.9998318945, 19.0009248718, 25.1599967919], [71.99986371155, 19.00081476465, 25.1599967919], [71.9998955286, 19.0007046575, 25.1599967919], [71.9998955286, 19.0007046575, 25.1599967919], [71.9998955286, 19.0007046575, 22.1599967919]]
+        # 19.0008147646
+
         # print self.error
-        if self.error[1]>=0.0001:
-            self.error[1] = 0.0001
-        elif self.error[1]<=-0.0001:
-            self.error[1]=-0.0001
-        if self.error[0]>=9e-5:
-            self.error[0] = 9e-5
-        elif self.error[0]<=-9e-5:
-            self.error[0]=-9e-5
+        # if self.error[1]>=0.0001:
+        #     self.error[1] = 0.0001
+        # elif self.error[1]<=-0.0001:
+        #     self.error[1]=-0.0001
+        # if self.error[0]>=9e-5:
+        #     self.error[0] = 9e-5
+        # elif self.error[0]<=-9e-5:
+        #     self.error[0]=-9e-5
         # print self.error
         for i in range(3):
             # Cummulative error as sum of previous errors
@@ -248,8 +258,8 @@ class Edrone():
 
         # Setting the throttle that balances the error
         self.drone_cmd.rcThrottle = self.base_pwm - self.ouput[2]
-        if self.drone_cmd.rcThrottle>1700:
-            self.drone_cmd.rcThrottle=1700
+        # if self.drone_cmd.rcThrottle>1800:
+        #     self.drone_cmd.rcThrottle=1800
         #Publishing the Drone commands for R,P,Y of drone
         self.handle_obstacle_x_y()
         self.drone_pub.publish(self.drone_cmd)
@@ -267,14 +277,16 @@ class Edrone():
             self.drone_cmd.rcYaw = self.base_pwm + ((self.location.latitude-self.targets[self.targets_achieved][1])>0)*90 -((self.location.latitude-self.targets[self.targets_achieved][1])<0)*90
 
     def controller(self):
-
+        # print(self.targets_achieved)
+        # print(self.targets)
         # Checking if the drone has reached the 1st checkpoint (Altitude of 0.31) and then changing the flag to 1
         # As stated in the problem statement , we have a permissible error of +- 0.05
         if self.location.altitude>self.targets[self.targets_achieved][2]-0.05 and self.location.altitude<self.targets[self.targets_achieved][2]+0.05 and self.targets_achieved == 0 :
             if round(self.previous_error[2],2) == round(self.error[2],2) and round(0.2,2)>abs(self.error[2]):
 
                 # Setting the flag to 1
-                self.targets_achieved = 1
+                self.targets_achieved += 1
+                self.target_list()
 
                 # Specifying the values for R,P,Y
                 # self.handle_yaw()
@@ -283,12 +295,12 @@ class Edrone():
 
         # Checking if the drone has reached the 2nd checkpoint (long = 72... , lat = 19.000047487) and then changing the flag to 2
         # As stated in the problem statement , we have a permissible error of +- self.allowed_lat_error in latitude and +- self.allowed_lon_error in longitude
-        elif self.location.latitude>self.targets[self.targets_achieved][1]-self.allowed_lat_error and self.location.latitude<self.targets[self.targets_achieved][1]+self.allowed_lat_error and self.targets_achieved == 1 :
-            if round(self.previous_error[1],8) == round(self.error[1],8) and round(self.allowed_lat_error,10)>abs(self.error[1]):
-                if self.location.longitude>self.targets[self.targets_achieved][0]-self.allowed_lon_error and self.location.longitude<self.targets[self.targets_achieved][0]+self.allowed_lon_error and self.targets_achieved == 1:
+        elif self.location.latitude>self.targets[self.targets_achieved][1]-self.allowed_lat_error and self.location.latitude<self.targets[self.targets_achieved][1]+self.allowed_lat_error and self.targets_achieved <= self.n :
+            if round(self.previous_error[1],6) == round(self.error[1],6) and round(self.allowed_lat_error,8)>abs(self.error[1]):
+                if self.location.longitude>self.targets[self.targets_achieved][0]-self.allowed_lon_error and self.location.longitude<self.targets[self.targets_achieved][0]+self.allowed_lon_error and self.targets_achieved <= self.n:
 
                     #setting the flag to 2
-                    self.targets_achieved = 2
+                    self.targets_achieved += 1
                     #Specifying the values for R,P,Y
                     self.drone_cmd.rcRoll = self.base_pwm
                     self.drone_cmd.rcPitch = self.base_pwm
@@ -299,8 +311,8 @@ class Edrone():
                 #Specifying the values for R,P,Y
                 self.takeoff_control()
 
-            elif self.targets_achieved == 1:
-                # print "Reached Altitude. Navigating Around."
+            elif self.targets_achieved <= self.n:
+                # print "targets achieved {}".format(self.targets_achieved)
                 # self.handle_yaw()
                 self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
                 # self.drone_cmd.rcRoll = self.base_pwm
@@ -308,15 +320,15 @@ class Edrone():
                 # self.drone_cmd.rcPitch = self.base_pwm
                 # long ---> fwd_bwd ---> roll
                 # lat ----> right_left
-            elif self.targets_achieved == 2 :
+            elif self.targets_achieved == self.n+1 :
                 self.landing_control()
                 if self.bottom_count>0:
-                    # print "Final Target reached"
+                    print "Final Target reached"
                     None
                 # self.handle_yaw()
                 self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
                 self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
-    
+
     def handle_obstacle_x_y(self):
         # Sum is -ve for right and +ve for left
         front_range_finder_avg = (self.range_finder_top_list[0] + self.range_finder_top_list[4])/2
@@ -326,27 +338,43 @@ class Edrone():
         #     self.drone_cmd.rcYaw = self.base_pwm - self.range_finder_top_list[0]
         #     self.drone_cmd.rcRoll = self.base_pwm + self.range_finder_top_list[0]
         if self.range_finder_top_list[3]<18:
+            self.obstacle_count += 1
             self.drone_cmd.rcRoll = self.base_pwm + 10
             self.drone_cmd.rcPitch = self.base_pwm
             self.drone_cmd.rcYaw = self.base_pwm
         if front_range_finder_avg < 18:
-            self.drone_cmd.rcPitch = self.base_pwm - 2
+            self.obstacle_count += 1
+            self.drone_cmd.rcPitch = self.base_pwm - 10
             self.drone_cmd.rcRoll = self.base_pwm
             self.drone_cmd.rcYaw = self.base_pwm
+        
+        if self.obstacle_count>30 :
+            self.obstacle_count =0
+            print "Boom"
+            print self.range_finder_top_list[3]
+            print front_range_finder_avg
+            self.delete_inserted()
+            self.targets[0][0] = self.location.longitude
+            self.targets[0][1] = self.location.latitude
+            self.target_list()
 
 
-    
+
     def landing_control(self):
-        # print(self.scan)
+        print(self.scan)
         if self.scan == True :
             # print("Checking Gripper")
             if self.bottom_count == 0:
                 print "Image Scanned. Targets acquired."
-                self.targets[2][2] -= self.range_finder_bottom
+                self.targets[self.targets_achieved][2] -= self.range_finder_bottom
                 self.targets_achieved = 0
+                # TODO: Delete inserted points
+                print self.targets_achieved
+                self.delete_inserted()
                 self.target_refresh()
+                print self.targets
                 self.bottom_count = 1
-            
+
             # TODO: Gripper code
             # self.Activate.start()
             # gripper = self.Activate.act()
@@ -356,17 +384,18 @@ class Edrone():
         self.drone_cmd.rcYaw = self.base_pwm
 
         if self.bottom_count == 0:
-            # print "Reached Subtarget. Landing to grab parcel."
+            print "Reached Subtarget. Landing to grab parcel."
             None
 
+    def delete_inserted(self):
+        del self.targets[1:self.n]
 
-    
     def takeoff_control(self):
         #Specifying the values for R,P,Y
         self.drone_cmd.rcRoll = self.base_pwm
         self.drone_cmd.rcPitch = self.base_pwm
         self.drone_cmd.rcYaw = self.base_pwm
-    
+
     def target_refresh(self):
         # Corodinates of 0th new are co-ordinates of last old +- altitude
         self.targets[0][0] = self.targets[2][0]
@@ -383,7 +412,27 @@ class Edrone():
             self.targets[0][2] = self.targets[0][2] + self.offset_alt
             self.targets[1][2] = self.targets[0][2]
             self.targets[2][2] = self.scanned_target[2]
-        print(self.targets)
+        self.target_list()
+        # print(self.targets)
+
+    def target_list(self):
+        PosX,PosY,alt1 = self.targets[0]
+        ToX,ToY,alt1 = self.targets[1]
+        dist = math.sqrt(pow((110692.0702932625 *(PosX-ToX)),2)+pow((-105292.0089353767 *(PosY-ToY)),2))
+        self.n = int(abs(dist/10))
+        # self.n = 2
+        points = [[0.0,0.0,0.0] for i in range(self.n)]
+        x = float(self.n)
+        for i in range(self.n):
+            points[i][0] = ((PosX*(1-((i+1)/x))) + ToX*((i+1)/x))
+            points[i][1] = ((PosY*(1-((i+1)/x))) + ToY*((i+1)/x))
+            points[i][2] = alt1
+            self.targets.insert(i+1,points[i][:])
+        del self.targets[-2]
+            # print(points[i][:])
+        # print points
+        # print self.targets
+
 
 
 if __name__ == '__main__':
