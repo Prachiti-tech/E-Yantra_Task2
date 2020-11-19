@@ -258,8 +258,10 @@ class Edrone():
 
         # Setting the throttle that balances the error
         self.drone_cmd.rcThrottle = self.base_pwm - self.ouput[2]
-        # if self.drone_cmd.rcThrottle>1800:
-        #     self.drone_cmd.rcThrottle=1800
+        if self.drone_cmd.rcThrottle>2000:
+            self.drone_cmd.rcThrottle=2000
+        elif self.drone_cmd.rcThrottle<1000:
+            self.drone_cmd.rcThrottle=1000
         #Publishing the Drone commands for R,P,Y of drone
         self.handle_obstacle_x_y()
         self.drone_pub.publish(self.drone_cmd)
