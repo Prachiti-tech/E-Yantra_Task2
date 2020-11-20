@@ -4,7 +4,8 @@
 
 from vitarana_drone.msg import edrone_cmd, location_custom
 from sensor_msgs.msg import NavSatFix, LaserScan
-from std_msgs.msg import Float32
+from vitarana_drone.srv import Gripper, GripperRequest
+from std_msgs.msg import Float32,String
 from pid_tune.msg import PidTune
 import rospy
 import time
@@ -96,6 +97,8 @@ class Edrone():
         self.targets_achieved = 0
         # Check if obstacle was deteceted
         self.obstacle_count = 0
+        # Gripper data
+        self.gripper_data = False
         #List of targets setpoints [[Longitude, Latitude, Altitude]]
         # self.targets = [
         #                 [72.0, 19.0000271036, 3.00], \
@@ -137,8 +140,8 @@ class Edrone():
         # ----------------------------------------------------------------------------------------------------------
 
         # Allowed errors in long.,and lat.
-        self.allowed_lon_error = 0.000000487*10
-        self.allowed_lat_error = 0.0000001704*10
+        self.allowed_lon_error = 0.0000047487/10
+        self.allowed_lat_error = 0.000004517/10
 
         #Checking if we have to scan or Land
         self.scan = False
@@ -164,6 +167,7 @@ class Edrone():
         rospy.Subscriber('/edrone/location_custom',location_custom,self.scanQR)
         rospy.Subscriber('/edrone/range_finder_bottom',LaserScan,self.range_bottom)
         rospy.Subscriber('/edrone/range_finder_top',LaserScan,self.range_top)
+        rospy.Subscriber('/edrone/gripper_check',String, self.gripper_callback)
     # Callback for getting gps co-ordinates
     def gps_callback(self, msg):
         self.location.altitude = msg.altitude
@@ -204,6 +208,20 @@ class Edrone():
 
     def range_top(self , msg):
         self.range_finder_top_list = msg.ranges
+
+    def gripper_callback(self,data):
+        # rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
+        # print data.data
+        if data.data == "True":
+            self.gripper_data = True
+        else :
+            self.gripper_data = False
+        
+    def activate_gripper(self):
+        rospy.wait_for_service('/edrone/activate_gripper')
+        act_gripper = rospy.ServiceProxy('/edrone/activate_gripper', Gripper)
+        req = GripperRequest(True)
+        resp = act_gripper(req) 
 
     def lat_to_x(self, input_latitude):
         self.x_lat = 110692.0702932625 * (input_latitude - 19)
@@ -366,26 +384,30 @@ class Edrone():
 
 
     def landing_control(self):
-        print(self.scan)
         if self.scan == True :
             # print("Checking Gripper")
             if self.bottom_count == 0:
                 print "Image Scanned. Targets acquired."
                 self.targets[self.targets_achieved][2] -= self.range_finder_bottom
-                self.targets_achieved = 0
-                # TODO: Delete inserted points
-                print self.targets_achieved
-                self.delete_inserted()
-                self.target_refresh()
-                print self.targets
-                self.bottom_count = 1
+                print self.gripper_data
+                if not self.gripper_data:
+                    print "Waiting to get aligned"
+                else :
+                    self.activate_gripper()
+                    self.targets_achieved = 0
+                    # TODO: Delete inserted points
+                    print self.targets_achieved
+                    self.delete_inserted()
+                    self.target_refresh()
+                    print self.targets
+                    self.bottom_count = 1
 
             # TODO: Gripper code
             # self.Activate.start()
             # gripper = self.Activate.act()
 
-        self.drone_cmd.rcRoll = self.base_pwm
-        self.drone_cmd.rcPitch = self.base_pwm
+        self.drone_cmd.rcRoll = self.base_pwm-self.ouput[0]
+        self.drone_cmd.rcPitch = self.base_pwm-self.ouput[1]
         self.drone_cmd.rcYaw = self.base_pwm
 
         if self.bottom_count == 0:
@@ -424,8 +446,10 @@ class Edrone():
         PosX,PosY,alt1 = self.targets[0]
         ToX,ToY,alt1 = self.targets[1]
         dist = math.sqrt(pow((110692.0702932625 *(PosX-ToX)),2)+pow((-105292.0089353767 *(PosY-ToY)),2))
-        self.n = int(abs(dist)/10)-1
+        self.n = int(abs(dist)/10)
         # self.n = 2
+        if self.n>1:
+            self.n-=1
         points = [[0.0,0.0,0.0] for i in range(self.n)]
         x = float(self.n)
         for i in range(self.n):
