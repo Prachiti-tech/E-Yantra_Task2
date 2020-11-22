@@ -211,7 +211,7 @@ class Edrone():
 if __name__ == '__main__':
     try:
         # Waiting for gazebo to start and position controller to start
-        time.sleep(5)
+        time.sleep(1)
 
         # Creating an instance of the above created class
         e_drone = Edrone()

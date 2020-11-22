@@ -12,40 +12,6 @@ import time
 import tf
 import math
 import numpy as np
-# class activate():
-#     def start(self):
-#         rospy.init_node('gripper_service')
-#         my_service = rospy.Service('/edrone/activate_gripper',Gripper, trigger_response)
-#         rospy.spin()
-
-#     def trigger_response(request):
-#         rospy.Subscriber('/edrone/gripper_check', String, self.gripper_check)
-
-#         def gripper_check(self,bool):
-#             if self.gripper_check == True:
-#                 return TriggerResponse(
-#                     success=True,
-#                 )
-#     def act():
-#         rospy.init_node('sos_service_client')
-
-#     # wait for this service to be running
-#     # Ideally, this service should run 24/7, but remember it's fake :)
-#         rospy.wait_for_service('/edrone/activate_gripper')
-
-#     # Create the connection to the service. Remeber it's a Trigger service
-#         gripper_service = rospy.ServiceProxy('/edrone/activate_gripper', Gripper)
-
-#     # Create an object of type TriggerRequest. We need a TriggerRequest for a Trigger service
-#     # We don't need to pass any argument because it doesn't take any
-#         sos = TriggerRequest()
-
-#     # Now send the request through the connection
-#         result = gripper_service(sos)
-
-#     # Done, let's see the result!
-#         return result
-
 
 class Edrone():
     """
@@ -56,71 +22,73 @@ class Edrone():
         2) PID tuning of Longitude, Latitude, and Altitude
         3) Callbacks for PID constants
         4) Basic Tasks like initalizing a node and Subscribing
+        5) Obstacle handling
+        6) Getting waypoints and travelling
 
     Note : [ Longitude, Latitude, Altitude ] is the convention followed
 
     Methods :
     ----------
-    pid :
-        The main PID algorithm (for Position control) runs when this method is called
+        1) pid :
+            The main PID algorithm (for Position control) runs when this method is called
 
-    imu_callback :
-        Its called when IMU messages are received
+        2) imu_callback :
+            Its called when IMU messages are received
 
-    gps_callback :
-        Receive the setpoint as in coordinates in 3d space [Latitudes, Longitude, Altitude]
+        3) gps_callback :
+            Receive the setpoint as in coordinates in 3d space [Latitudes, Longitude, Altitude]
 
-    altitude_set_pid :
-        Callback to assign Kp,Ki,Kd for Altitude
+        4) altitude_set_pid :
+            Callback to assign Kp,Ki,Kd for Altitude
 
-    long_set_pid :
-        Callback to assign Kp,Ki,Kd for Longitude
+        5) long_set_pid :
+            Callback to assign Kp,Ki,Kd for Longitude
 
-    lat_set_pid :
-        Callback to assign Kp,Ki,Kd for Latitude
+        6) lat_set_pid :
+            Callback to assign Kp,Ki,Kd for Latitude
 
-    range_bottom:
-        Callback to get values of the bottom ranger sensor
+        7) range_bottom:
+            Callback to get values of the bottom ranger sensor
 
-    range_top:
-        Callback to get values of the top ranger sensor
+        8) range_top:
+            Callback to get values of the top ranger sensor
 
-    gripper_callback:
-        Callback for the finding if the drone is in range of gripper activation
+        9) gripper_callback:
+            Callback for the finding if the drone is in range of gripper activation
 
-    activate_gripper:
-        Function Controlling gripper activation
+        10) activate_gripper:
+            Function Controlling gripper activation
 
-    lat_to_x:
-        Function for converting latitude to meters
+        11) lat_to_x:
+            Function for converting latitude to meters
 
-    long_to_y:
-        Function for converting longitude to meters
+        12) long_to_y:
+            Function for converting longitude to meters
 
-    controller :
-        Function for checking if the drone has reached the checkpoint
-        and setting a new checkpoint
+        13) controller :
+            Function for checking if the drone has reached the checkpoint
+            and setting a new checkpoint
 
-    handle_obstacle_x_y :
-        Function handles obstacle detection and avoidance
+        14) handle_obstacle_x_y :
+            Function handles obstacle detection and avoidance
 
-    provide_current_loc_as_target:
-        Function for defining the safe distance from an obstacle
+        15) provide_current_loc_as_target:
+            Function for defining the safe distance from an obstacle
 
-    landing_control:
-        Function for handling the landing, scanning and gripper operations of the drone
+        16) landing_control:
+            Function for handling the landing, scanning and gripper operations of the drone
 
-    takeoff_control:
-        Function handles take off operation of the drone
+        17) takeoff_control:
+            Function handles take off operation of the drone
 
-    target_refresh:
-        Function refreshes the waypoint list to provide for new desitnation scanned by the Qr scanner
+        18) target_refresh:
+            Function refreshes the waypoint list to provide for new desitnation scanned by the Qr scanner
 
-    target_list:
-        Function generates new waypoints between the current location and destination and inserts into the waypoint list
+        19) target_list:
+            Function generates new waypoints between the current location and destination and inserts into the waypoint list
 
-    delete_inserted:
-        Deleting the previously added waypoints in the list before refreshing the list for new waypoints
+        20) delete_inserted:
+            Deleting the previously added waypoints in the list before refreshing the list for new waypoints
 
 
     """
@@ -135,40 +103,57 @@ class Edrone():
 
         #Created a flag for changing the setpoints
         self.targets_achieved = 0
-        # Check if obstacle was deteceted
+
+        # Counter Check if obstacle was deteceted
         self.obstacle_count = 0
-        # Gripper data
+
+        # Gripper check vaiable
         self.gripper_data = False
+
+        # A multiplication factor to increase number of waypoints proportional to distance between final and initial
         self.stride = 25
-        #List of targets setpoints [[Longitude, Latitude, Altitude]]
-        # self.targets = [
-        #                 [72.0, 19.0000271036, 3.00], \
-        #                 [72.0, 19.000000000, 3.00], \
-        #                 [72.0, 19.000000000, 1.0]  \
-        #                ]
+
+        # Hardcoded initial box target point
+        # Longitude , latitude and altitude
         self.targets = [
                         [71.9998318945, 19.0009248718, 25.1599967919], \
                         [71.9998955286, 19.0007046575, 25.1599967919], \
                         [71.9998955286, 19.0007046575, 22.1599967919]  \
                        ]
-        # Longitude , latitude and altitude
+        
+        # Variable to store scanned waypoints
         self.scanned_target = [0.0,0.0,0.0]
+
+        # To store bottom range finder values
         self.range_finder_bottom = 0
-        self.bottom_count = 0
-        self.offset_alt = 3.00
+        
+        # Variable for top range finder sensor data
         # [1] right, [2] back, [3] left, [0,4] front w.r.t eyantra logo
         self.range_finder_top_list = [0.0, 0.0, 0.0 ,0.0, 0.0]
+        
+        # Weights for left right sensor values
+        self.weights_lr = [1.3,-1.3]
+
+        # Counter for number of landings made
+        self.bottom_count = 0
+
+        # Offset altitude
+        self.offset_alt = 3.00
+
+        # Safety distances
+        self.safe_dist_lat = 2/105292.0089353767
+        self.safe_dist_long =  10/110692.0702932625
+        # To store the x and y co-ordinates in meters
         self.x_lat = 0.0
         self.y_long = 0.0
-        # Weights for left right
-        self.weights_lr = [1.3,-1.3]
-        # self.Activate = activate()
+        
+        # Number of waypoints initialized to -1
         self.n = -1
+
+        # List to store waypoints Points calculated
         self.points =[]
+
         # Kp, Ki and Kd found out experimentally using PID tune
-        # self.Kp = [0.06*1000*156*4, 1223*0.06*1000*2,1082*0.06]
-        # self.Ki = [0.008*10,        0.008*10,         0.0*0.008]
-        # self.Kd = [0.3*10000*873*4, 2102*0.3*10000*2,  4476*0.3]
         self.Kp = [0.06*1000*156*4, 1323*0.06*1000*2,1082*0.06]
         self.Ki = [0.008*10,        0.008*10,         0.0*0.008]
         self.Kd = [0.3*10000*873*4, 2202*0.3*10000*2,  4476*0.3]
@@ -189,8 +174,6 @@ class Edrone():
 
         #Checking if we have to scan or Land
         self.scan = False
-        self.gripper = False
-
 
         # Time in which PID algorithm runs
         self.pid_break_time = 0.060  # in seconds
@@ -203,7 +186,7 @@ class Edrone():
         self.zero_error = rospy.Publisher('/zero_error',Float32, queue_size=1)
         # -----------------------------------------------------------------------------------------------------------
 
-        # Subscribers for gps co-ordinates, and pid_tune GUI
+        # Subscribers for gps co-ordinates, and pid_tune GUI, gripper,rangefinder, custom location message
         rospy.Subscriber('/edrone/gps',NavSatFix, self.gps_callback)
         rospy.Subscriber('/pid_tuning_altitude', PidTune, self.altitude_set_pid)
         rospy.Subscriber('/pid_tuning_roll', PidTune, self.long_set_pid)
@@ -212,12 +195,12 @@ class Edrone():
         rospy.Subscriber('/edrone/range_finder_bottom',LaserScan,self.range_bottom)
         rospy.Subscriber('/edrone/range_finder_top',LaserScan,self.range_top)
         rospy.Subscriber('/edrone/gripper_check',String, self.gripper_callback)
+
     # Callback for getting gps co-ordinates
     def gps_callback(self, msg):
         self.location.altitude = msg.altitude
         self.location.latitude = msg.latitude
         self.location.longitude = msg.longitude
-        # ---------------------------------------------------------------------------------------------------------------
 
     # Callback function for /pid_tuning_altitude in case required
     # This function gets executed each time when /tune_pid publishes /pid_tuning_altitude
@@ -239,23 +222,24 @@ class Edrone():
         self.Kp[1] = lat.Kp * 0.06*1000
         self.Ki[1] = lat.Ki * 0.008*1000
         self.Kd[1] = lat.Kd * 0.3*10000
-    #
+    
+    # Callback for qr code scanner
     def scanQR(self, msg):
         self.scanned_target[0] = msg.longitude
         self.scanned_target[1] = msg.latitude
         self.scanned_target[2] = msg.altitude
         self.scan = msg.scan
-        # print self.scanned_target, self.location
+    
+    # Callback for bottom rangefinder
     def range_bottom(self , msg):
         self.range_finder_bottom = msg.ranges[0]
-        # print(self.range_bottom)
 
+    # Callback for top rangefinder
     def range_top(self , msg):
         self.range_finder_top_list = msg.ranges
 
+    # Callback for gripper
     def gripper_callback(self,data):
-        # rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
-        # print data.data
         if data.data == "True":
             self.gripper_data = True
         else :
@@ -275,7 +259,6 @@ class Edrone():
     #converting longitude to meters
     def long_to_y(self, input_longitude):
         self.y_long= -105292.0089353767 * (input_longitude - 72)
-        # if you use this for control, you may have to change the relevant pitch   direction because of the sign
 
     # ----------------------------------------------------------------------------------------------------------------------
 
@@ -285,12 +268,6 @@ class Edrone():
         self.error[0] = self.location.longitude - self.targets[self.targets_achieved][0]
         self.error[1] = self.location.latitude - self.targets[self.targets_achieved][1]
         self.error[2] = self.location.altitude - self.targets[self.targets_achieved][2]
-        # print self.targets
-        # print self.targets_achieved
-        # print self.n
-        # [71.99986371155, 19.00081476465, 25.1599967919], [71.9998955286, 19.0007046575, 25.1599967919]]
-        # [[71.9998318945, 19.0009248718, 25.1599967919], [71.99986371155, 19.00081476465, 25.1599967919], [71.9998955286, 19.0007046575, 25.1599967919], [71.9998955286, 19.0007046575, 25.1599967919], [71.9998955286, 19.0007046575, 22.1599967919]]
-        # 19.0008147646
 
         for i in range(3):
             # Cummulative error as sum of previous errors
@@ -303,22 +280,23 @@ class Edrone():
         for i in range(3):
             self.ouput[i] = self.Kp[i] * self.error[i] + self.Ki[i] * self.cummulative_error[i] + self.Kd[i]*(self.error[i]-self.previous_error[i])
 
-        # Method for checking the error and then changing the target location
-        # print self.ouput
+        # Contoller handles the states of landing , takeoff, mid-air
         self.controller()
-        # self.handle_obstacle_x_y()
+
         # Storing Previous Error values for differential error
         for i in range(3):
             self.previous_error[i] = self.error[i]
 
         # Setting the throttle that balances the error
         self.drone_cmd.rcThrottle = self.base_pwm - self.ouput[2]
+
+        # CLamping the throttle values between 1000 and 2000
         if self.drone_cmd.rcThrottle>2000:
             self.drone_cmd.rcThrottle=2000
         elif self.drone_cmd.rcThrottle<1000:
             self.drone_cmd.rcThrottle=1000
+        
         #Publishing the Drone commands for R,P,Y of drone
-
         self.drone_pub.publish(self.drone_cmd)
 
         # Publishing errors for plotjuggler
@@ -327,20 +305,15 @@ class Edrone():
         self.alt_error.publish(self.error[2])
         self.zero_error.publish(0.0)
 
-    def handle_yaw(self):
-        if self.location.longitude-self.targets[self.targets_achieved][0] != 0:
-            self.drone_cmd.rcYaw = self.base_pwm + math.atan((self.location.latitude-self.targets[self.targets_achieved][1])/(self.location.longitude-self.targets[self.targets_achieved][0]))*180/math.pi
-        else:
-            self.drone_cmd.rcYaw = self.base_pwm + ((self.location.latitude-self.targets[self.targets_achieved][1])>0)*90 -((self.location.latitude-self.targets[self.targets_achieved][1])<0)*90
-
     def controller(self):
-        # Checking if the drone has reached the 1st checkpoint (Altitude of 0.31) and then changing the flag to 1
+        # Checking if the drone has reached the nth checkpoint and then incrementing the counter by 1
         # As stated in the problem statement , we have a permissible error of +- 0.05
         if self.location.altitude>self.targets[self.targets_achieved][2]-0.05 and self.location.altitude<self.targets[self.targets_achieved][2]+0.05 and self.targets_achieved == 0 :
             if round(self.previous_error[2],2) == round(self.error[2],2) and round(0.2,2)>abs(self.error[2]):
 
-                # Setting the flag to 1
+                # Incrementing the counter of waypoints
                 self.targets_achieved += 1
+
                 if not self.gripper_data:
                     self.target_list()
 
@@ -350,40 +323,45 @@ class Edrone():
                 self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
 
 
-        # Checking if the drone has reached the 2nd checkpoint (long = 72... , lat = 19.000047487) and then changing the flag to 2
+        # Checking if the drone has reached the lat and long then imcrementing the counter
         # As stated in the problem statement , we have a permissible error of +- self.allowed_lat_error in latitude and +- self.allowed_lon_error in longitude
         elif self.location.latitude>self.targets[self.targets_achieved][1]-self.allowed_lat_error and self.location.latitude<self.targets[self.targets_achieved][1]+self.allowed_lat_error and self.targets_achieved <= self.n :
             if round(self.previous_error[1],6) == round(self.error[1],6) and round(self.allowed_lat_error,8)>abs(self.error[1]):
                 if self.location.longitude>self.targets[self.targets_achieved][0]-self.allowed_lon_error and self.location.longitude<self.targets[self.targets_achieved][0]+self.allowed_lon_error and self.targets_achieved <= self.n:
 
-                    #setting the flag to 2
+                    #Incrementing the counter of waypoints 
                     self.targets_achieved += 1
+
                     #Specifying the values for R,P,Y
-                    # self.drone_cmd.rcRoll = self.base_pwm
-                    # self.drone_cmd.rcPitch = self.base_pwm
-                    # self.drone_cmd.rcYaw = self.base_pwm
                     self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
                     self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
+
+                    # Check if there are any obstacles and handle them
                     self.handle_obstacle_x_y()
+
+                    print "Navigating around"
         else :
+
+            # Drone is taking off
             if self.targets_achieved == 0  :
                 print "Taking Off."
+
                 #Specifying the values for R,P,Y
                 self.takeoff_control()
-
+            
+            # In mid air
             elif self.targets_achieved <= self.n:
-                # print "targets achieved {}".format(self.targets_achieved)
-                # self.handle_yaw()
+                # Specifying the values for R,P,Y
                 self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
-                # self.drone_cmd.rcRoll = self.base_pwm
                 self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
                 self.handle_obstacle_x_y()
-                # self.drone_cmd.rcPitch = self.base_pwm
-                # long ---> fwd_bwd ---> roll
-                # lat ----> right_left
+
+            # If all the waypoints are reached
             elif self.targets_achieved == self.n+1 :
+                # Specifying the values for R,P,Y
                 self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
                 self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
+                # Check if it reached correct location
                 if self.location.latitude>self.targets[self.targets_achieved][1]-self.allowed_lat_error and self.location.latitude<self.targets[self.targets_achieved][1]+self.allowed_lat_error:
                     if round(self.previous_error[1],7) == round(self.error[1],7) and round(self.allowed_lat_error,8)>abs(self.error[1]):
                         if self.location.longitude>self.targets[self.targets_achieved][0]-self.allowed_lon_error and self.location.longitude<self.targets[self.targets_achieved][0]+self.allowed_lon_error:
@@ -391,48 +369,46 @@ class Edrone():
                             #Function controls the landing, scanning and gripping of the drone
                             self.landing_control()
                             if self.bottom_count > 0 :
-                                # print self.targets
                                 print "Final Target reached"
-                                None
-                # self.handle_yaw()
 
 
-#------------------------------HANDLING OBSTACLES-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    #------------------------------HANDLING OBSTACLES-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
     def handle_obstacle_x_y(self):
-        # Sum is -ve for right and +ve for left
-        previous = self.obstacle_count
+        """
+        Check if obstacle is occured:
+        if yes: 
+            then recalulate waypoints with safety distance in apptopriate direction
+        if no:
+            nothing
+        """
         front_range_finder_avg = (self.range_finder_top_list[0] + self.range_finder_top_list[4])/2
 
-        if self.range_finder_top_list[3]<15 and self.gripper_data:
+        if self.range_finder_top_list[3]<10 and self.gripper_data:
             self.obstacle_count += 1
+            print "Handling obstacle"
 
-
-        if front_range_finder_avg < 10 and self.gripper_data:
+        if front_range_finder_avg < 5 and self.gripper_data:
+            print "Handling obstacle"
             self.delete_inserted()
-            # print self.targets
             self.targets[0][0] = self.location.longitude
-            self.targets[0][1] = self.location.latitude-5/105292.0089353767
+            self.targets[0][1] = self.location.latitude-self.safe_dist_lat
             self.target_list()
             
-        # print self.obstacle_count,previous
         if self.obstacle_count>20:
             self.targets_achieved=1
             self.provide_current_loc_as_target()
             self.obstacle_count = 0
-            previous=0
 
-
+    # Providing current location with safety distance and recalculating the waypoints
     def provide_current_loc_as_target(self):
         self.delete_inserted()
-        # - 0.05/110692.0702932625
-        # +0.05/105292.0089353767
-        self.targets[0][0] = self.location.longitude + 10/110692.0702932625
+        self.targets[0][0] = self.location.longitude +self.safe_dist_long
         self.targets[0][1] = self.location.latitude
         self.target_list()
         self.targets_achieved += 1
-#--------------------------------HANDLING LANDING SCANNING AND GRIPPING-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+    
+    #--------------------------------HANDLING LANDING SCANNING AND GRIPPING,Landing-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def landing_control(self):
         #checking if the box is scanned
         if self.scan == True :
@@ -462,6 +438,8 @@ class Edrone():
             self.drone_cmd.rcRoll = self.base_pwm
             self.drone_cmd.rcPitch = self.base_pwm
             self.drone_cmd.rcYaw = self.base_pwm
+            
+            # Deactivate the gripper
             if self.gripper_data:
                 self.activate_gripper(shall_i=False)
         else :
@@ -469,7 +447,7 @@ class Edrone():
             self.drone_cmd.rcPitch = self.base_pwm-self.ouput[1]
             self.drone_cmd.rcYaw = self.base_pwm
 
-        #Changing the allowed landing error for better precision in picking up the box
+        # Changing the allowed error to its maximum once the box is picked up to fast up the drone
         if self.gripper_data:
             self.allowed_lat_error = 0.000004517
             self.allowed_lon_error = 0.0000047487
@@ -478,22 +456,17 @@ class Edrone():
             print "Reached Subtarget. Landing to grab parcel."
             None
 
-#------------------------------HANDLING TAKE OFF-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+    #------------------------------HANDLING TAKE OFF-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def takeoff_control(self):
         #Specifying the values for R,P,Y
         self.drone_cmd.rcRoll = self.base_pwm
         self.drone_cmd.rcPitch = self.base_pwm
         self.drone_cmd.rcYaw = self.base_pwm
 
-
-#----------------------------------------HANDLING WAYPOINTS SUBSTITUTION---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+    #----------------------------------------HANDLING WAYPOINTS SUBSTITUTION---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def delete_inserted(self):
-
+        # Deleting the inserted waypoints
         del self.targets[1:self.n]
-
-
 
     def target_refresh(self):
         # Corodinates of 0th new are co-ordinates of last old +- altitude
@@ -514,16 +487,22 @@ class Edrone():
         self.target_list()
 
     def target_list(self):
+
         #getting the coordinates for current point
         PosX,PosY,alt1 = self.targets[0]
+
         #getting the coordinates for destiantion point
         ToX,ToY,alt1 = self.targets[1]
+
         #Finding the distance between them
         dist = math.sqrt(pow((110692.0702932625 *(PosX-ToX)),2)+pow((-105292.0089353767 *(PosY-ToY)),2))
 
         #Defining the number of waypoints to be inserted between current and goal location
         self.n = int(abs(dist))*self.stride
+        
+        # Initialize list
         points = [[0.0,0.0,0.0] for i in range(self.n)]
+
         x = float(self.n)
         #Finding the waypoints and inserting them into the targets list
         for i in range(self.n):
@@ -533,12 +512,11 @@ class Edrone():
             self.targets.insert(i+1,points[i][:])
         #Deleting the extra identical waypoint created
         del self.targets[-2]
-
-#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    #-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
     # Waiting for Gazebo to start
-    time.sleep(2)
+    time.sleep(0.5)
 
     # Creating an instance of the above class
     e_drone = Edrone()
