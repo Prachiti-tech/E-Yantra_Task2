@@ -24,7 +24,7 @@
 <html>
     <p align="center";>
     <a href="task1A">
-        <img src="https://github.com/Prachiti-tech/E-Yantra_Task2/blob/main/images/task2A.png" height="2000" width="700"/>
+        <img src="https://github.com/Prachiti-tech/E-Yantra_Task2/blob/main/images/task2A.png" height="1200" width="700"/>
     </a>
     </p>
 </html>
@@ -33,7 +33,7 @@
 <html>
     <p align="center";>
     <a href="task1A">
-        <img src="https://github.com/Prachiti-tech/E-Yantra_Task2/blob/main/images/task2B.png" height="2000" width="700"/>
+        <img src="https://github.com/Prachiti-tech/E-Yantra_Task2/blob/main/images/task2B.png" height="800" width="1000"/>
     </a>
     </p>
 </html>
@@ -42,7 +42,7 @@
 <html>
     <p align="center";>
     <a href="task1A">
-        <img src="https://github.com/Prachiti-tech/E-Yantra_Task2/blob/main/images/task2C.png" height="2000" width="700"/>
+        <img src="https://github.com/Prachiti-tech/E-Yantra_Task2/blob/main/images/task2C.png" height="1200" width="700"/>
     </a>
     </p>
 </html>
