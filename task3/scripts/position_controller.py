@@ -5,7 +5,7 @@
 from vitarana_drone.msg import edrone_cmd, location_custom
 from sensor_msgs.msg import NavSatFix, LaserScan
 from vitarana_drone.srv import Gripper, GripperRequest
-from std_msgs.msg import Float32,String
+from std_msgs.msg import Float32,String,Int32
 from pid_tune.msg import PidTune
 import rospy
 import time
@@ -122,9 +122,9 @@ class Edrone():
 
         # Longitude , latitude and altitude
         self.targets = [
-                        [71.9998318945, 19.0009248718, 25.1599967919], \
-                        [71.9998955286, 19.0007046575, 25.1599967919], \
-                        [71.9998955286, 19.0007046575, 22.1599967919]  \
+                        [71.9998195486, 18.999241138, 20], \
+                        [72.0000664814, 18.9990965928, 20], \
+                        [72.0000664814, 18.9990965928, 20]  \
                        ]
 
         # Variable to store scanned waypoints
@@ -190,12 +190,13 @@ class Edrone():
         # Time in which PID algorithm runs
         self.pid_break_time = 0.060  # in seconds
 
-        # Publishing servo-control messaages and altitude,longitude,latitude and zero error on errors /drone_command, /alt_error, /long_error, /lat_error
+        # Publishing servo-control messaages and altitude,longitude,latitude and zero error on errors /drone_command, /alt_error, /long_error, /lat_error, and current marker id
         self.drone_pub = rospy.Publisher('/drone_command', edrone_cmd, queue_size=1)
         self.alt_error = rospy.Publisher('/alt_error',Float32, queue_size=1)
         self.long_error = rospy.Publisher('/long_error',Float32, queue_size=1)
         self.lat_error = rospy.Publisher('/lat_error',Float32, queue_size=1)
         self.zero_error = rospy.Publisher('/zero_error',Float32, queue_size=1)
+        self.curr_m_id = rospy.Publisher('/edrone/curr_marker_id',Int32,queue_size=1)
         # -----------------------------------------------------------------------------------------------------------
 
         # Subscribers for gps co-ordinates, and pid_tune GUI, gripper,rangefinder, custom location message and x,y errors in meters
@@ -243,7 +244,7 @@ class Edrone():
         self.scanned_target[1] = msg.latitude
         self.scanned_target[2] = msg.altitude
         self.scan = msg.scan
-        print self.scan
+        # print self.scan
 
     # Callback for bottom rangefinder
     def range_bottom(self , msg):
@@ -260,11 +261,11 @@ class Edrone():
         else :
             self.gripper_data = False
     
-    def handle_x_m_err(self):
-        None
+    def handle_x_m_err(self,msg):
+        print msg.data
     
-    def handle_y_m_err(self):
-        None
+    def handle_y_m_err(self,msg):
+        print msg.data
 
     # Activating the gripper
     def activate_gripper(self,shall_i):
@@ -368,12 +369,12 @@ class Edrone():
                     # # Check if there are any obstacles and handle them
                     # self.handle_obstacle_x_y()
                     self.start_to_check_for_obstacles = True
-                    print "Navigating around"
+                    # print "Navigating around"
         else :
 
             # Drone is taking off
             if self.targets_achieved == 0  :
-                print "Taking Off."
+                # print "Taking Off."
                 self.start_to_check_for_obstacles = False
                 #Specifying the values for R,P,Y
                 self.takeoff_control()
@@ -393,7 +394,8 @@ class Edrone():
                 # Check if it reached correct location
                 if self.location.latitude>self.targets[self.targets_achieved][1]-self.allowed_lat_error and self.location.latitude<self.targets[self.targets_achieved][1]+self.allowed_lat_error:
                     if self.bottom_count > 0 :
-                        print "Final Target reached"
+                        # print "Final Target reached"
+                        None
                     if round(self.previous_error[1],7) == round(self.error[1],7) and round(self.allowed_lat_error,8)>abs(self.error[1]):
                         if self.location.longitude>self.targets[self.targets_achieved][0]-self.allowed_lon_error and self.location.longitude<self.targets[self.targets_achieved][0]+self.allowed_lon_error:
 
@@ -414,16 +416,16 @@ class Edrone():
         """
         front_range_finder_avg = (self.range_finder_top_list[0] + self.range_finder_top_list[4])/2
 
-        if self.range_finder_top_list[3]<12 and self.gripper_data:
+        if self.range_finder_top_list[3]<12:
             self.obstacle_count += 1
-            if self.obstacle_count>3:
-                print "Handling obstacle due to left rangefinder"
+            if self.obstacle_count>4:
+                # print "Handling obstacle due to left rangefinder"
                 self.targets_achieved=1
                 self.provide_current_loc_as_target()
-                self.obstacle_count=3
+                self.obstacle_count=4
 
         if front_range_finder_avg < 4 and front_range_finder_avg>1 and self.gripper_data:
-            print "Handling obstacle due to front rangefinder"
+            # print "Handling obstacle due to front rangefinder"
             self.delete_inserted()
             self.targets[0][0] = self.location.longitude
             self.targets[0][1] = self.location.latitude-self.safe_dist_lat
@@ -481,7 +483,8 @@ class Edrone():
             self.allowed_lon_error = 0.0000047487/2
 
         if self.bottom_count == 0:
-            print "Reached Subtarget. Landing to grab parcel."
+            # print "Reached Subtarget. Landing to grab parcel."
+            None
 
     #------------------------------HANDLING TAKE OFF-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def takeoff_control(self):
