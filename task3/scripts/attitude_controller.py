@@ -209,20 +209,17 @@ class Edrone():
 
 
 if __name__ == '__main__':
-    try:
-        # Waiting for gazebo to start and position controller to start
-        time.sleep(1)
+    # Waiting for gazebo to start and position controller to start
+    time.sleep(1)
 
-        # Creating an instance of the above created class
-        e_drone = Edrone()
+    # Creating an instance of the above created class
+    e_drone = Edrone()
 
-        # PID sampling rate
-        r = rospy.Rate(1/e_drone.pid_break_time)
+    # PID sampling rate
+    r = rospy.Rate(1/e_drone.pid_break_time)
 
-        while not rospy.is_shutdown():
-            # Calling the pid method
-            e_drone.pid()
-            # Sleeping for specified sample rate
-            r.sleep()
-    except:
-        pass
+    while not rospy.is_shutdown():
+        # Calling the pid method
+        e_drone.pid()
+        # Sleeping for specified sample rate
+        r.sleep()

@@ -4,9 +4,10 @@ from matplotlib import pyplot as plt
 import math
 import rospy
 from std_msgs.msg import Float32
-from sensor_msgs.msg import Image,NavSatFix
+from sensor_msgs.msg import Image,LaserScan
 from cv_bridge import CvBridge, CvBridgeError
 import numpy as np
+import time
 
 class Marker():
     """
@@ -18,8 +19,8 @@ class Marker():
         rospy.init_node('marker_detection')
 
         self.hfov_rad = 1.3962634
-        self.err_x_m = 0.0
-        self.err_y_m = 0.0
+        self.err_x_m = 10000000.0
+        self.err_y_m = 10000000.0
         self.bridge = CvBridge()
         self.logo_cascade = cv2.CascadeClassifier('/home/shreyas/catkin_ws/src/vitarana_drone/scripts/cascade.xml')
         self.img = np.empty([])
@@ -28,12 +29,14 @@ class Marker():
         self.Z_m = -1.0
         # Subscribing to the camera topic
         rospy.Subscriber("/edrone/camera/image_raw",Image, self.image_callback)
-        rospy.Subscriber('/edrone/gps',NavSatFix, self.gps_callback)
+        rospy.Subscriber('/edrone/range_finder_bottom',LaserScan,self.range_bottom)
         self.x_err_pub = rospy.Publisher("/edrone/err_x_m",data_class=Float32,queue_size=1)
         self.y_err_pub = rospy.Publisher("/edrone/err_y_m",data_class=Float32,queue_size=1)
     
-    def gps_callback(self, msg):
-        self.Z_m = msg.altitude
+    def range_bottom(self, msg):
+        # print msg.ranges[0]
+        if not math.isinf(msg.ranges[0]):
+            self.Z_m = msg.ranges[0]
 
     # Callback function of camera topic
     def image_callback(self, data):
@@ -58,13 +61,19 @@ class Marker():
         return (self.img.shape[i]/2)/math.tan(self.hfov_rad/2)
 
     def meter_from_pix(self,pix,i):
-        return (self.img.shape[i]/2-pix)*self.Z_m/self.focal_length(i)
+        try :
+            meters = (self.img.shape[i]/2-pix)*self.Z_m/self.focal_length(i)
+            return meters
+        except :
+            pass
+            return 0.0
 
     def pub(self):
         self.x_err_pub.publish(self.err_x_m)
         self.y_err_pub.publish(self.err_y_m)
 
 if __name__ == "__main__" :
+    time.sleep(0.5)
     marker = Marker()
     rate = rospy.Rate(1)
     while not rospy.is_shutdown():
