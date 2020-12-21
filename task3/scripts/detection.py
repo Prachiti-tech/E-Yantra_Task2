@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+
+# Importing required libraries/modules
 import cv2
 from matplotlib import pyplot as plt
 import math
@@ -18,29 +20,49 @@ class Marker():
 
         rospy.init_node('marker_detection')
 
+        # Given constant for edrone camera
         self.hfov_rad = 1.3962634
+
+        # Initiate x & y errors to large values
         self.err_x_m = 10000000.0
         self.err_y_m = 10000000.0
+
+        # Create a CvBridge object
         self.bridge = CvBridge()
+
+        # Importing Cascade xml
         self.logo_cascade = cv2.CascadeClassifier('/home/shreyas/catkin_ws/src/vitarana_drone/scripts/cascade.xml')
+
+        # Create an empty ndarray
         self.img = np.empty([])
+
+        # Create a variable for storing available detectoins
         self.logo = None
+
+        # List to store center of detected box
         self.center_of_box = [0.0,0.0]
+
+        # Vertical height required for localization using focal length formula
         self.Z_m = -1.0
-        # Subscribing to the camera topic
+
+        # Subscribing to the required topics
         rospy.Subscriber("/edrone/camera/image_raw",Image, self.image_callback)
         rospy.Subscriber('/edrone/range_finder_bottom',LaserScan,self.range_bottom)
+
+        # Publishers for x and  errors in meters
         self.x_err_pub = rospy.Publisher("/edrone/err_x_m",data_class=Float32,queue_size=1)
         self.y_err_pub = rospy.Publisher("/edrone/err_y_m",data_class=Float32,queue_size=1)
     
+    # Callback for bottom rangefinder
     def range_bottom(self, msg):
-        # print msg.ranges[0]
+        # Check if range is a feasible number
         if not math.isinf(msg.ranges[0]):
             self.Z_m = msg.ranges[0]
 
     # Callback function of camera topic
     def image_callback(self, data):
         try:
+            # Converting
             self.img = self.bridge.imgmsg_to_cv2(data,"bgr8")
             self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
             self.detect()
@@ -49,19 +71,23 @@ class Marker():
         	pass
 
     def detect(self):
+
+        # Main detection funciton using openCv cascade
         self.logo = self.logo_cascade.detectMultiScale(self.img, scaleFactor=1.05)
         for (x, y, w, h) in self.logo:
-            # print (x,y,w,h)
             self.center_of_box = (w/2+x), (h/2+y)
             self.err_x_m = self.meter_from_pix(self.center_of_box[0],0)
             self.err_y_m = self.meter_from_pix(self.center_of_box[1],1)
         
 
     def focal_length(self,i):
+
+        # As per the formula given
         return (self.img.shape[i]/2)/math.tan(self.hfov_rad/2)
 
     def meter_from_pix(self,pix,i):
         try :
+            # As per the formula given
             meters = (self.img.shape[i]/2-pix)*self.Z_m/self.focal_length(i)
             return meters
         except :
@@ -69,6 +95,7 @@ class Marker():
             return 0.0
 
     def pub(self):
+        # Publishing obtained values
         self.x_err_pub.publish(self.err_x_m)
         self.y_err_pub.publish(self.err_y_m)
 
