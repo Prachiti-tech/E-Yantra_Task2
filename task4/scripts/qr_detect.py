@@ -47,5 +47,8 @@ if __name__ == '__main__':
 	image_proc_obj = image_proc()
 	rate  = rospy.Rate(1/0.06)
 	while not rospy.is_shutdown():
-		image_proc_obj.ScanCode()
-		rate.sleep()
+		try:
+			image_proc_obj.ScanCode()
+			rate.sleep()
+		except:
+			pass

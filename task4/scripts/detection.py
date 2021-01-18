@@ -10,6 +10,8 @@ from sensor_msgs.msg import Image,LaserScan
 from cv_bridge import CvBridge, CvBridgeError
 import numpy as np
 import time
+import os
+import rospkg
 
 class Marker():
     """
@@ -31,7 +33,9 @@ class Marker():
         self.bridge = CvBridge()
 
         # Importing Cascade xml
-        self.logo_cascade = cv2.CascadeClassifier('/home/saad/catkin_ws/src/vitarana_drone/scripts/cascade.xml')
+        path = rospkg.RosPack().get_path("vitarana_drone")
+        path = os.path.join(path,"scripts/cascade.xml")
+        self.logo_cascade = cv2.CascadeClassifier(path)
 
         # Create an empty ndarray
         self.img = np.empty([])

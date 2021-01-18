@@ -2,7 +2,7 @@
 
 # Importing the required libraries
 
-from vitarana_drone.msg import edrone_cmd, location_custom
+from vitarana_drone.msg import edrone_cmd, location_custom,MarkerData
 from sensor_msgs.msg import NavSatFix, LaserScan
 from vitarana_drone.srv import Gripper, GripperRequest
 from std_msgs.msg import Float32, String, Int32
@@ -91,6 +91,8 @@ class Edrone():
         20) delete_inserted:
             Deleting the previously added waypoints in the list before refreshing the list for new waypoints
 
+        21) marker_handling:
+            Handles Multiple markers
 
     """
 
@@ -131,7 +133,7 @@ class Edrone():
         self.targets = [
             [71.9998195486, 18.999241138, 20],
             [72.0000664814, 18.9990965928, 20],
-            [72.0000664814, 18.9990965928, 20]
+            [72.0000664814, 18.9990965928, 11.70]
         ]
 
         # Variable to store scanned waypoints
@@ -159,6 +161,9 @@ class Edrone():
         # Safety distances
         self.safe_dist_lat = 21.555/105292.0089353767
         self.safe_dist_long = 6/110692.0702932625
+
+        # Marker data object
+        self.marker_data = MarkerData()
 
         # To store the x and y co-ordinates in meters
         self.err_x_m = 0.0
@@ -354,6 +359,13 @@ class Edrone():
         self.alt_error.publish(self.error[2])
         self.zero_error.publish(0.0)
         self.curr_m_id.publish(self.marker_id+1)
+
+        # Publishing marker data
+        self.marker_data.err_x_m = self.err_x_m
+        self.marker_data.err_y_m = self.err_y_m
+        self.marker_data.marker_id = self.marker_id+1
+        self.marker_data_pub.publish(self.marker_data)
+        self.marker_data_pub = rospy.Publisher('/edrone/marker_data',MarkerData,queue_size=1)
 
     def controller(self):
         # Checking if the drone has reached the nth checkpoint and then incrementing the counter by 1

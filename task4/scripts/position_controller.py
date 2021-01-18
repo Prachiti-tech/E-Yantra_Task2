@@ -13,7 +13,8 @@ import tf
 import math
 import numpy as np
 import csv
-
+import os
+import rospkg
 
 class Edrone():
     """
@@ -107,6 +108,9 @@ class Edrone():
         # Created a flag for changing the setpoints
         self.targets_achieved = 0
 
+        # Counter for csv file
+        self.csv_counter = 0
+
         # Counter Check if obstacle was deteceted
         self.obstacle_count = 0
 
@@ -114,7 +118,7 @@ class Edrone():
         self.gripper_data = False
 
         # A multiplication factor to increase number of waypoints proportional to distance between final and initial
-        self.stride = 0.05
+        self.stride = 0.1
 
         # Hardcoded initial target point
         """
@@ -194,10 +198,12 @@ class Edrone():
         self.start_to_check_for_obstacles = False
 
         # Kp, Ki and Kd found out experimentally using PID tune
-        self.Kp = [0.06*1000*156*2*3*1.025, 0.06*1000*156*2*3*1.025, 1082*0.06]
+        self.Kp = [125000.0, 125000.0, 1082*0.06]
         self.Ki = [0.008*10*1.05,        0.008*10*1.05,         0.0*0.008]
-        self.Kd = [0.3*10000*873*3*1.025, 0.3*10000*873*3*1.025,  4476*0.3]
-
+        self.Kd = [8493425, 8493425,  4476*0.3]
+        # self.Kp = [0.06*1000*156*2*3*1.025, 0.06*1000*156*2*3*1.025, 1082*0.06]
+        # self.Ki = [0.008*10*1.05,        0.008*10*1.05,         0.0*0.008]
+        # self.Kd = [0.3*10000*873*3*1.025, 0.3*10000*873*3*1.025,  4476*0.3]
         # Output, Error ,Cummulative Error and Previous Error of the PID equation in the form [Long, Lat, Alt]
         self.error = [0.0, 0.0, 0.0]
         self.ouput = [0.0, 0.0, 0.0]
@@ -247,11 +253,17 @@ class Edrone():
         rospy.Subscriber('/edrone/err_x_m', Float32, self.handle_x_m_err)
         rospy.Subscriber('/edrone/err_y_m', Float32, self.handle_y_m_err)
 
+
     # Callback for getting gps co-ordinates
     def gps_callback(self, msg):
+        self.csv_counter += 1
         self.location.altitude = msg.altitude
         self.location.latitude = msg.latitude
         self.location.longitude = msg.longitude
+        if self.csv_counter == 1:
+            self.get_gps_coordinates()
+        else :
+            self.csv_counter ==2
 
     # Callback function for /pid_tuning_altitude in case required
     # This function gets executed each time when /tune_pid publishes /pid_tuning_altitude
@@ -401,9 +413,12 @@ class Edrone():
                 if self.n < 0:
                     self.n = 0
                     
-                if self.n!=0:
+                if self.n!=0 and self.states!=5:
                     self.allowed_lon_error = 0.000047487
                     self.allowed_lat_error = 0.00004517
+                # else :
+                #     self.allowed_lon_error = 0.000047487 / 4
+                #     self.allowed_lat_error = 0.00004517 / 4
                 # Specifying the values for R,P,Y
                 self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
                 self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
@@ -494,7 +509,8 @@ class Edrone():
                 self.set_new_building_as_target()
                 self.control_state(0)
 
-        elif abs(self.err_x_m) < 0.2 and abs(self.err_y_m) < 0.2:
+        elif abs(self.err_x_m) < 0.2 and abs(self.err_y_m) < 0.2 :
+            print self.err_x_m,self.err_y_m
             print(self.targets[self.targets_achieved])
             self.targets_achieved = 2
             
@@ -519,12 +535,16 @@ class Edrone():
         self.targets[2][0] = self.buiding_locations[self.marker_id][0]
         self.targets[2][1] = self.buiding_locations[self.marker_id][1]     
         if self.targets[2][2] > self.buiding_locations[self.marker_id][2]:
-            self.targets[0][2] = self.targets[2][2] + (15 - (self.targets[2][2] - self.buiding_locations[self.marker_id][2]))
+            # self.targets[0][2] = self.targets[2][2] + (15 - (self.targets[2][2] - self.buiding_locations[self.marker_id][2]))
+            self.targets[0][2] = self.targets[2][2]+5
             self.targets[1][2] = self.targets[0][2]
         else:
             self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 15
             self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 15
         self.targets[2][2] = self.buiding_locations[self.marker_id][2]
+        # if self.marker_id == 6:
+        #     self.targets[0][2] +=3
+        #     self.targets[0][1] +=3
         self.target_list()
         print(self.targets)
         self.takeoff_control()
@@ -554,38 +574,40 @@ class Edrone():
         front_range_finder_avg = (
             self.range_finder_top_list[0] + self.range_finder_top_list[4])/2
 
-        if self.range_finder_top_list[3] < 8:
+        left = self.range_finder_top_list[3] < 8  and self.range_finder_top_list[3]>3
+        right =  self.range_finder_top_list[1] < 8  and self.range_finder_top_list[1]>3
+        front = front_range_finder_avg < 4 and front_range_finder_avg > 1
+        if left and (not right) and (not front):
             print("Left")
-            self.obstacle_count += 1
-            if self.obstacle_count > 3:
-                print "Handling obstacle due to left rangefinder"
-                self.targets_achieved = 1
-                self.provide_current_loc_as_target(-1.5)
-                self.obstacle_count = 3
+            # self.obstacle_count += 1
+            # if self.obstacle_count > 3:
+            print "Handling obstacle due to left rangefinder"
+            self.targets_achieved = 1
+            self.provide_current_loc_as_target(-1.5)
+                # self.obstacle_count = 3
         
-        if self.range_finder_top_list[1] < 8:
+        if right and (not left) and (not front):
             print("Right")
-            self.obstacle_count += 1
-            if self.obstacle_count > 0:
-                print "Handling obstacle due to right rangefinder"
-                self.targets_achieved = 1
-                self.provide_current_loc_as_target(1)
-                self.obstacle_count = 3
+            # self.obstacle_count += 1
+            # if self.obstacle_count > 0:
+            print "Handling obstacle due to right rangefinder"
+            self.targets_achieved = 1
+            self.provide_current_loc_as_target(1)
+                # self.obstacle_count = 3
 
-        if front_range_finder_avg < 4 and front_range_finder_avg > 0.5 :
+        if front and (not right) and (not left) :
             print "Handling obstacle due to front rangefinder"
             self.delete_inserted()
-            self.targets[0][0] = self.location.longitude+1.4*self.safe_dist_long
-            self.targets[0][1] = self.location.latitude 
+            self.targets[0][0] = self.location.longitude+1.5*(self.safe_dist_long)
+            self.targets[0][1] = self.location.latitude -self.safe_dist_lat/5
             # self.stride = 0.008
             self.target_list()
             self.targets_achieved = 1
 
     # Providing current location with safety distance and recalculating the waypoints
     def provide_current_loc_as_target(self,n):
-        print("New targets")
         self.delete_inserted()
-        self.targets[0][0] = self.location.longitude + 2.2*self.safe_dist_long
+        self.targets[0][0] = self.location.longitude + 1.5*self.safe_dist_long
         self.targets[0][1] = self.location.latitude- n*self.safe_dist_lat
         self.target_list()
         self.targets_achieved = 1
@@ -703,8 +725,9 @@ class Edrone():
     #Reading coordinates of cells through csv file
     def get_gps_coordinates(self):
         print("Yoooo")
-
-        with open('/home/saad/catkin_ws/src/vitarana_drone/scripts/manifest.csv','r') as file:
+        path = rospkg.RosPack().get_path("vitarana_drone")
+        path = os.path.join(path,"scripts/manifest.csv")
+        with open(path,'r') as file:
             csvreader = csv.reader(file)
 
             #list of rows in csv file
@@ -749,7 +772,6 @@ class Edrone():
             self.buiding_locations.append([self.location.longitude,self.location.latitude,self.location.altitude])
             self.set_new_building_as_target
             print(self.buiding_locations)
-
             # self.set_new_building_as_target()
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -763,7 +785,7 @@ if __name__ == '__main__':
 
     # PID sampling rate
     r = rospy.Rate(1/e_drone.pid_break_time)
-    e_drone.get_gps_coordinates()
+    # e_drone.get_gps_coordinates()
 
     while not rospy.is_shutdown():
         # Call pid function
