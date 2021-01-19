@@ -92,6 +92,9 @@ class Edrone():
 
         20) delete_inserted:
             Deleting the previously added waypoints in the list before refreshing the list for new waypoints
+        
+        21) get_gps_coordinates:
+            Function creates the target and building list by decoding the data from the given csv file
 
 
     """
@@ -126,38 +129,19 @@ class Edrone():
         Building 2: lat: 18.9990965925, long: 71.9999050292, alt: 22.2
         Building 3: lat: 18.9993675932, long: 72.0000569892, alt: 10.7
         """
-        # self.buiding_locations = [
-        #     [72.0000664814, 18.9990965928, 10.75],
-            
-        #     [71.9999050292, 18.9990965925, 22.20],
-        #     [72.0000569892, 18.9993675932, 10.70]
-        # ]
-
-        # # Initial Longitude , latitude and altitude
-        # self.targets = [
-        #     [71.9998195486, 18.999241138, 20],
-        #     [72.0000664814, 18.9990965928, 20],
-        #     [72.0000664814, 18.9990965928, 20]
-        # ]
         #0:takeoff,1:transverse,2:landing,3:takeoff W/P,4:transverse W/P,5:landing W/P
         self.states = 0
-        # self.buiding_locations = [
-        #     [71.9999430161, 18.9999864489, 13.44099749139],
-        #     [71.9999429002, 19.0007030405, 22.1600026799],
-        #     [71.9999430161, 18.9999864489 + 2*0.000013552, 13.44099749139],
-        #     [72.0000949773, 19.0004681325, 16.660019864],
-        #     [71.9999430161 + 0.000014245, 18.9999864489 + 0.000013552, 13.44099749139],
-        #     [71.9999429002, 19.0007030405, 22.1600026799], 
-        # ]
+        
+        #List of target buildings
         self.buiding_locations = []
 
         # Initial Longitude , latitude and altitude
         self.targets = [
-            [71.9999430161, 18.9999864489, 13.44099749139],
-            [71.9999430161, 18.9999864489, 13.44099749139],
-            [71.9999430161, 18.9999864489, 8.44099749139]
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0]
         ]
-        # self.targets = []
+    
         # Variable to store scanned waypoints
         self.scanned_target = [0.0, 0.0, 0.0]
 
@@ -220,7 +204,9 @@ class Edrone():
 
         # Checking if we have to scan or Land
         self.scan = False
+        #Variable representing if the box has been grabbed
         self.box_grabbed = 0
+        #Constraining the no of times location_error has been called
         self.count = 0
         # Time in which PID algorithm runs
         self.pid_break_time = 0.060  # in seconds
@@ -256,14 +242,12 @@ class Edrone():
 
     # Callback for getting gps co-ordinates
     def gps_callback(self, msg):
-        self.csv_counter += 1
         self.location.altitude = msg.altitude
         self.location.latitude = msg.latitude
         self.location.longitude = msg.longitude
-        if self.csv_counter == 1:
+        if self.csv_counter == 0:
             self.get_gps_coordinates()
-        else :
-            self.csv_counter ==2
+            self.csv_counter = 1
 
     # Callback function for /pid_tuning_altitude in case required
     # This function gets executed each time when /tune_pid publishes /pid_tuning_altitude
@@ -404,6 +388,7 @@ class Edrone():
                 self.targets_achieved += 1
                 print("in takeoff")
                 if self.states == 0:
+                    #
                     self.control_state(1)
                     self.count = 0
                 else:
@@ -437,8 +422,10 @@ class Edrone():
                     self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
                     if self.targets_achieved == self.n:
                         if self.states == 1:
+                            #Updating the state of the drone from transvering to landing
                             self.control_state(2)
                         elif self.states == 4:
+                            #Updating the state of the drone from transvering with package to landing with package
                             self.control_state(5)
                     if self.targets_achieved == self.n and self.states == 2:
                         self.allowed_lon_error = 0.0000047487/4
@@ -464,8 +451,10 @@ class Edrone():
             # If all the waypoints are reached
             elif self.targets_achieved >= self.n+1:
                 if self.states == 1:
+                    #Updating the state of the drone from takeoff to transversing
                     self.control_state(2)
                 elif self.states == 4:
+                    #Updating the state of the drone from takeoff with package to tranversing with package 
                     self.control_state(5)
                 # Specifying the values for R,P,Y
                 self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
@@ -495,11 +484,12 @@ class Edrone():
             print "Errors in X and Y in meters are {}, {} ".format(
                 self.err_x_m, self.err_y_m)
             
-            # If marker id (0,1,2) is 2 then it has achived all the markers
+            # If marker id (0,1,2,3,4,5,6) is 6 then it has achieved all the markers
             if self.marker_id == 6:
                 print "All the targets achieved"
                 self.landing_control()
                 return
+            #if marker <6 new target building will be provided
             elif self.marker_id < 6:
                 print("New building")
                 self.activate_gripper(shall_i=False)
@@ -507,6 +497,7 @@ class Edrone():
                 self.bottom_count = 0
                 self.marker_id += 1
                 self.set_new_building_as_target()
+                #Updating the state of the drone from landing with package to takeoff
                 self.control_state(0)
 
         elif abs(self.err_x_m) < 0.2 and abs(self.err_y_m) < 0.2 :
@@ -535,16 +526,12 @@ class Edrone():
         self.targets[2][0] = self.buiding_locations[self.marker_id][0]
         self.targets[2][1] = self.buiding_locations[self.marker_id][1]     
         if self.targets[2][2] > self.buiding_locations[self.marker_id][2]:
-            # self.targets[0][2] = self.targets[2][2] + (15 - (self.targets[2][2] - self.buiding_locations[self.marker_id][2]))
             self.targets[0][2] = self.targets[2][2]+5
             self.targets[1][2] = self.targets[0][2]
         else:
             self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 15
             self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 15
         self.targets[2][2] = self.buiding_locations[self.marker_id][2]
-        # if self.marker_id == 6:
-        #     self.targets[0][2] +=3
-        #     self.targets[0][1] +=3
         self.target_list()
         print(self.targets)
         self.takeoff_control()
@@ -577,30 +564,33 @@ class Edrone():
         left = self.range_finder_top_list[3] < 8  and self.range_finder_top_list[3]>3
         right =  self.range_finder_top_list[1] < 8  and self.range_finder_top_list[1]>3
         front = front_range_finder_avg < 4 and front_range_finder_avg > 1
+
+        #handling obstacle for left range finder
         if left and (not right) and (not front):
             print("Left")
             # self.obstacle_count += 1
             # if self.obstacle_count > 3:
             print "Handling obstacle due to left rangefinder"
             self.targets_achieved = 1
-            self.provide_current_loc_as_target(-1.5)
+            self.provide_current_loc_as_target(-0.8)
                 # self.obstacle_count = 3
-        
+
+        #handling obstacle for right range finder
         if right and (not left) and (not front):
             print("Right")
             # self.obstacle_count += 1
             # if self.obstacle_count > 0:
             print "Handling obstacle due to right rangefinder"
             self.targets_achieved = 1
-            self.provide_current_loc_as_target(1)
+            self.provide_current_loc_as_target(0.8)
                 # self.obstacle_count = 3
 
+        #handling obstacle for front range finder
         if front and (not right) and (not left) :
             print "Handling obstacle due to front rangefinder"
             self.delete_inserted()
             self.targets[0][0] = self.location.longitude+1.5*(self.safe_dist_long)
             self.targets[0][1] = self.location.latitude -self.safe_dist_lat/5
-            # self.stride = 0.008
             self.target_list()
             self.targets_achieved = 1
 
@@ -608,7 +598,7 @@ class Edrone():
     def provide_current_loc_as_target(self,n):
         self.delete_inserted()
         self.targets[0][0] = self.location.longitude + 1.5*self.safe_dist_long
-        self.targets[0][1] = self.location.latitude- n*self.safe_dist_lat
+        self.targets[0][1] = self.location.latitude - n*self.safe_dist_lat
         self.target_list()
         self.targets_achieved = 1
 
@@ -636,14 +626,9 @@ class Edrone():
                     self.activate_gripper(shall_i=True)
                     if self.gripper_data and self.states == 2:
                         self.targets_achieved = 0
-
-                        # Delete previously inserted points
-                        # self.delete_inserted()
-
-                        # Creating a new list of waypoints to be followed for the destination
-                        # self.target_refresh()
                         self.marker_id += 1
                         self.set_new_building_as_target()
+                        #Updating the state of the drone from landing to takeoff with package
                         self.control_state(3)
                         self.bottom_count = 1
                         self.box_grabbed = 1
@@ -661,9 +646,9 @@ class Edrone():
             self.allowed_lat_error = 0.000004517/2
             self.allowed_lon_error = 0.0000047487/2
 
-        if self.bottom_count == 0:
-            # print "Reached Subtarget. Landing to grab parcel."
-            None
+        if self.marker_id == 7:
+            self.csv_counter == -1
+            return
 
     # ------------------------------HANDLING TAKE OFF-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def takeoff_control(self):
@@ -678,7 +663,7 @@ class Edrone():
         del self.targets[1:-2]
 
     def target_refresh(self):
-        # Corodinates of 0th new are co-ordinates of last old +- altitude
+        # Coordinates of 0th new are co-ordinates of last old +- altitude
         self.targets[0][0] = self.targets[2][0]
         self.targets[0][1] = self.targets[2][1]
         self.targets[1][0] = self.scanned_target[1]
@@ -739,40 +724,21 @@ class Edrone():
             #Altitude is constant for all cells since the grid is planar
             altitude=8.44099749139
 
-            # #location and destination of first parcel
-            # destination1 = [float(item) for item in list_of_contents[0][1:]]
-            # # destination1.insert(0,list_of_contents[0][0])
-            # location1=[columns[list_of_contents[0][0]],rows[destination1[0][1]],altitude]
-            # self.building_locations.append(location1)
-            # self.building_locations.append(destination1)
-
-            # #location and destination of second parcel
-            # destination2 = [float(item) for item in list_of_contents[1][1:]]
-            # # destination2.insert(1,list_of_contents[1][0])
-            # location2=[columns[list_of_contents[1][0]],rows[destination2[0][1]],altitude]
-            # self.building_locations.append(location2)
-            # self.building_locations.append(destination2)
-
-            # #location and destination of third parcel
-            # destination3 = [float(item) for item in list_of_contents[2][1:]]
-            # # destination3.insert(1,list_of_contents[2][0])
-            # location3=[columns[list_of_contents[2][0]],rows[destination3[0][1]],altitude]
-            # self.building_locations.append(location3)
-            # self.building_locations.append(destination3)
-            
+            #Creating list for the targets buildings
             for i in range(3):
                 cell = list_of_contents[i][0]
-                coorodinate = [rows[cell[1]],columns[cell[0]],altitude]
-                self.buiding_locations.append(coorodinate)
-                coorodinate = [float(item) for item in list_of_contents[i][1:]]
-                z = coorodinate[0]
-                coorodinate[0] = coorodinate[1]
-                coorodinate[1] = z
-                self.buiding_locations.append(coorodinate)
+                coordinate = [rows[cell[1]],columns[cell[0]],altitude]
+                self.buiding_locations.append(coordinate)
+                coordinate = [float(item) for item in list_of_contents[i][1:]]
+                z = coordinate[0]
+                coordinate[0] = coordinate[1]
+                coordinate[1] = z
+                self.buiding_locations.append(coordinate)
             self.buiding_locations.append([self.location.longitude,self.location.latitude,self.location.altitude])
-            self.set_new_building_as_target
+            self.targets[2] = [self.location.longitude,self.location.latitude,self.location.altitude]
+            #seting the first parcel as the target
+            self.set_new_building_as_target()
             print(self.buiding_locations)
-            # self.set_new_building_as_target()
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -785,10 +751,11 @@ if __name__ == '__main__':
 
     # PID sampling rate
     r = rospy.Rate(1/e_drone.pid_break_time)
-    # e_drone.get_gps_coordinates()
 
     while not rospy.is_shutdown():
-        # Call pid function
-        e_drone.pid()
+        #Condition for calling the pid after the target lists are created
+        if e_drone.csv_counter == 1:
+            # Call pid function
+            e_drone.pid()
         # Sleep for specified sampling rate
         r.sleep()
