@@ -98,7 +98,7 @@ class Edrone():
         self.gripper_data = False
 
         # A multiplication factor to increase number of waypoints proportional to distance between final and initial
-        self.stride = 1/16.25
+        self.stride = 1/100.0
 
         # Hardcoded initial target point
         """
@@ -212,7 +212,7 @@ class Edrone():
         rospy.Subscriber('/edrone/gps', NavSatFix, self.gps_callback)
         rospy.Subscriber('/pid_tuning_altitude',
                          PidTune, self.altitude_set_pid)
-        # rospy.Subscriber('/pid_tuning_roll', PidTune, self.long_set_pid)
+        rospy.Subscriber('/pid_tuning_roll', PidTune, self.long_set_pid)
         # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.lat_set_pid)
         rospy.Subscriber('/edrone/location_custom',
                          location_custom, self.scanQR)
@@ -247,7 +247,9 @@ class Edrone():
         self.Kp[0] = long.Kp * 0.06
         self.Ki[0] = long.Ki * 0.008
         self.Kd[0] = long.Kd * 0.3
-
+        self.Kp[1] = long.Kp * 0.06
+        self.Ki[1] = long.Ki * 0.008
+        self.Kd[1] = long.Kd * 0.3
     # Callback function for latitude tuning in case required
     # This function gets executed each time when /tune_pid publishes /pid_tuning_pitch
     def lat_set_pid(self, lat):
@@ -310,10 +312,10 @@ class Edrone():
         self.Kp[2] = 21
         self.Ki[2] =0.05
         
-        if self.Kp[2] > 21 :
-            self.Kp[2] = 21
-        if self. Kp[2] < 9:
-            self.Kp[2] = 9
+        # if self.Kp[2] > 21 :
+        #     self.Kp[2] = 21
+        # if self. Kp[2] < 9:
+        #     self.Kp[2] = 9
         
         self.Kd[2] = pow(self.error[2],2) - 3*self.error[2] + 2920
         if self.Kd[2] < 2930 :
@@ -336,21 +338,22 @@ class Edrone():
         for i in range(3):
             # Cummulative error as sum of previous errors
             self.cummulative_error[i] += self.error[i]
-            print("Current",self.cummulative_error[2])
+            # print("Current",self.cummulative_error[2])
             # Limiting the cummulative error
-            if abs(self.cummulative_error[i]) >= self.max_cummulative_error[i] and self.Ki[i]!=0:
-                self.cummulative_error[i] = self.error[i]/self.Ki[i]
-                print("Reset",self.cummulative_error[2])
+            if abs(self.cummulative_error[i]) >= self.max_cummulative_error[i]:
+                self.cummulative_error[i] = self.error[i]
+                # print("Reset",self.cummulative_error[2])
             # print self.cummulative_error
         # Main PID Equation i.e assigning the output its value acc. to output = kp*error + kd*(error-previous_error) + ki*cummulative_error
         self.update_const()
-        for i in range(3):
+        for i in range(2):
             self.ouput[i] = self.Kp[i] * self.error[i] + self.Ki[i] * \
                 self.cummulative_error[i] + self.Kd[i] * \
                 (self.error[i]-self.previous_error[i])
-
+        
+        self.ouput[2] = self.Kp[2] * self.error[2] + self.Ki[2] * self.cummulative_error[2] + self.Kd[2] *(self.error[2]-self.previous_error[2])*(abs(self.error[2]-self.previous_error[2])<3)
         # Contoller handles the states of landing , takeoff, mid-air
-        # self.controller()
+        self.controller()
         # if self.start_to_check_for_obstacles:
         #     self.handle_obstacle_x_y()
 
