@@ -118,6 +118,7 @@ class Edrone():
             [0.0, 0.0, 0.0],
             [0.0, 0.0, 0.0]
         ]
+        self.targets =[[72.00021844008124, 18.999888790656602, 21.757981], [72.000156706, 18.999888790656602, 21.757981], [72.000156706, 18.9998373885, 16.757981]]
     
         # Variable to store scanned waypoints
         self.scanned_target = [0.0, 0.0, 0.0]
@@ -163,10 +164,10 @@ class Edrone():
         # self.Ki = [0.008*1000*2.05,        0.008*1000*2.05,         1*0.00008]
         # self.Kd = [8293425.0, 8293425.0,  4476*0.3]
         self.Kp = [0, 0,2533*0.06]
-        self.Ki = [0,        0,        271*0.008]
-        self.Kd = [0,0,12333*0.3*10]
+        self.Ki = [0,        0,        371*0.008]
+        self.Kd = [0,0,4498*0.3*10]
 
-        self.error_scaling = 1000000
+        self.error_scaling = 1000
         # self.Kp = [20000.0, 20000.0,1082*0.06]
         # self.Ki = [0.008*100,        0.008*100,         0.0*0.008]
         # self.Kd = [0.3*10000*873, 0.3*10000*873,  4476*0.3]
@@ -178,14 +179,14 @@ class Edrone():
         self.ouput = [0.0, 0.0, 0.0]
         self.cummulative_error = [0.0, 0.0, 0.0]
         self.previous_error = [0.0, 0.0, 0.0]
-        self.max_cummulative_error = [100, 100, 200]
+        self.max_cummulative_error = [100, 100, 100]
         self.throttle = 0
         self.base_pwm = 1500
         # ----------------------------------------------------------------------------------------------------------
 
         # Allowed errors in long.,and lat.
-        self.allowed_lon_error = 0.0000047487/4
-        self.allowed_lat_error = 0.000004517/4
+        self.allowed_lon_error = 0.047487/4
+        self.allowed_lat_error = 0.04517/4
 
         # Checking if we have to scan or Land
         self.scan = False
@@ -246,16 +247,16 @@ class Edrone():
     def long_set_pid(self, long):
         self.Kp[0] = long.Kp * 0.06
         self.Ki[0] = long.Ki * 0.008
-        self.Kd[0] = long.Kd * 0.3
+        self.Kd[0] = long.Kd * 3
         self.Kp[1] = long.Kp * 0.06
         self.Ki[1] = long.Ki * 0.008
-        self.Kd[1] = long.Kd * 0.3
+        self.Kd[1] = long.Kd * 3
     # Callback function for latitude tuning in case required
     # This function gets executed each time when /tune_pid publishes /pid_tuning_pitch
     def lat_set_pid(self, lat):
         self.Kp[1] = lat.Kp * 0.06
         self.Ki[1] = lat.Ki * 0.008
-        self.Kd[1] = lat.Kd * 0.3
+        self.Kd[1] = lat.Kd * 3
 
     # Callback for qr code scanner
     def scanQR(self, msg):
@@ -326,8 +327,8 @@ class Edrone():
     def pid(self):
     
         # Error is defined as setpoint minus current orientaion
-        self.error[0] = (self.targets[self.targets_achieved][0] - self.location.longitude)*self.error_scaling
-        self.error[1] = (self.targets[self.targets_achieved][1] - self.location.latitude)*self.error_scaling
+        self.error[0] = (-self.targets[self.targets_achieved][0] + self.location.longitude)*self.error_scaling
+        self.error[1] = (-self.targets[self.targets_achieved][1] + self.location.latitude)*self.error_scaling
         self.error[2] = self.targets[self.targets_achieved][2] - self.location.altitude
 
         for i in range(3):
@@ -336,7 +337,7 @@ class Edrone():
             # print("Current",self.cummulative_error[2])
             # Limiting the cummulative error
             if abs(self.cummulative_error[i]) >= self.max_cummulative_error[i]:
-                self.cummulative_error[i] = 0
+                self.cummulative_error[i] = self.error[i]
                 # print("Reset",self.cummulative_error[2])
             # print self.cummulative_error
         # Main PID Equation i.e assigning the output its value acc. to output = kp*error + kd*(error-previous_error) + ki*cummulative_error
@@ -346,9 +347,10 @@ class Edrone():
                 self.cummulative_error[i] + self.Kd[i] * \
                 (self.error[i]-self.previous_error[i])
         
-        self.ouput[2] = self.Kp[2] * self.error[2] + self.Ki[2] * (self.cummulative_error[2]-self.error[i]) + self.Kd[2] *(self.error[2]-self.previous_error[2])*(abs(self.error[2]-self.previous_error[2])<100)
+        self.ouput[2] = self.Kp[2] * self.error[2] + self.Ki[2] * self.cummulative_error[2] + self.Kd[2] *(self.error[2]-self.previous_error[2])*(abs(self.error[2]-self.previous_error[2])<100)
+        print self.ouput[0]
         # Contoller handles the states of landing , takeoff, mid-air
-        # self.controller()
+        self.controller()
         # if self.start_to_check_for_obstacles:
         #     self.handle_obstacle_x_y()
 
@@ -380,6 +382,7 @@ class Edrone():
         
     def controller(self):
         self.alt_diff.publish(abs(self.location.altitude-self.targets[-1][2]))
+        print(self.targets_achieved,self.n, self.states)
         # Checking if the drone has reached the nth checkpoint and then incrementing the counter by 1
         # As stated in the problem statement , we have a permissible error of +- 0.05
         if self.location.altitude > self.targets[self.targets_achieved][2]-0.5 and self.location.altitude < self.targets[self.targets_achieved][2]+0.5 and self.targets_achieved == 0:
@@ -410,8 +413,8 @@ class Edrone():
                 #     self.allowed_lon_error = 0.000047487 / 4
                 #     self.allowed_lat_error = 0.00004517 / 4
                 # Specifying the values for R,P,Y
-                self.drone_cmd.rcRoll = self.base_pwm + self.ouput[0]
-                self.drone_cmd.rcPitch = self.base_pwm + self.ouput[1]
+                self.drone_cmd.rcRoll = self.base_pwm + self.ouput[1]
+                self.drone_cmd.rcPitch = self.base_pwm + self.ouput[0]
                 self.start_to_check_for_obstacles = True
 
         # Checking if the drone has reached the lat and long then imcrementing the counter
@@ -458,8 +461,8 @@ class Edrone():
             # In mid air
             elif self.targets_achieved <= self.n:
                 # Specifying the values for R,P,Y
-                self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
-                self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
+                self.drone_cmd.rcRoll = self.base_pwm - self.ouput[1]
+                self.drone_cmd.rcPitch = self.base_pwm - self.ouput[0]
 
             # If all the waypoints are reached
             elif self.targets_achieved >= self.n+1:
@@ -739,6 +742,7 @@ class Edrone():
                 points[i][2] = alt1
                 self.targets.insert(i+1, points[i][:])
             self.targets[-1][-1] = last_alt
+        print(self.targets)
 
     #Reading coordinates of cells through csv file
     def get_gps_coordinates(self):
@@ -781,7 +785,9 @@ class Edrone():
                     cell = list_of_contents[i][2]
                     coordinate = [return_rows[cell[1]],return_columns[cell[0]],altitude,list_of_contents[i][0]]
                     self.buiding_locations.append(coordinate)
-            self.targets[2] = [self.location.longitude,self.location.latitude,self.location.altitude]
+            self.targets[0] = [self.location.longitude,self.location.latitude,self.location.altitude +10]
+            print(self.targets)
+            self.marker_id = 1
             self.set_new_building_as_target()
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 

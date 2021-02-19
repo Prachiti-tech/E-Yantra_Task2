@@ -123,8 +123,8 @@ class Edrone():
         rospy.Subscriber('/drone_command', edrone_cmd,
                          self.drone_command_callback)
         rospy.Subscriber('/edrone/imu/data', Imu, self.imu_callback)
-        rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)
-        rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)
+        # rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)
+        # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)
         # rospy.Subscriber('/pid_tuning_yaw', PidTune, self.yaw_set_pid)
         # ------------------------------------------------------------------------------------------------------------
 
