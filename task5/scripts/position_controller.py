@@ -162,9 +162,9 @@ class Edrone():
         # self.Kp = [135000.0, 135000.0, 1082*0.06]
         # self.Ki = [0.008*1000*2.05,        0.008*1000*2.05,         1*0.00008]
         # self.Kd = [8293425.0, 8293425.0,  4476*0.3]
-        self.Kp = [0, 0,0]
-        self.Ki = [0,        0,         0]
-        self.Kd = [0,0,0]
+        self.Kp = [0, 0,2533*0.06]
+        self.Ki = [0,        0,        371*0.008]
+        self.Kd = [0,0,4498*0.3*10]
 
         self.error_scaling = 1000000
         # self.Kp = [20000.0, 20000.0,1082*0.06]
@@ -212,7 +212,7 @@ class Edrone():
         rospy.Subscriber('/edrone/gps', NavSatFix, self.gps_callback)
         rospy.Subscriber('/pid_tuning_altitude',
                          PidTune, self.altitude_set_pid)
-        rospy.Subscriber('/pid_tuning_roll', PidTune, self.long_set_pid)
+        # rospy.Subscriber('/pid_tuning_roll', PidTune, self.long_set_pid)
         # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.lat_set_pid)
         rospy.Subscriber('/edrone/location_custom',
                          location_custom, self.scanQR)
@@ -239,7 +239,7 @@ class Edrone():
     def altitude_set_pid(self, alt):
         self.Kp[2] = alt.Kp * 0.06
         self.Ki[2] = alt.Ki * 0.008
-        self.Kd[2] = alt.Kd * 1
+        self.Kd[2] = alt.Kd * 0.3*10
 
     # Callback function for longitude tuning in case required
     # This function gets executed each time when /tune_pid publishes /pid_tuning_roll
@@ -317,11 +317,11 @@ class Edrone():
         # if self. Kp[2] < 9:
         #     self.Kp[2] = 9
         
-        self.Kd[2] = pow(self.error[2],2) - 3*self.error[2] + 2920
-        if self.Kd[2] < 2930 :
-            self.Kd[2] = 2930
-        if self. Kd[2] > 3100:
-            self.Kd[2] = 3100
+        # self.Kd[2] = pow(self.error[2],2) - 3*self.error[2] + 2920
+        # if self.Kd[2] < 2930 :
+        #     self.Kd[2] = 2930
+        # if self. Kd[2] > 3100:
+        self.Kd[2] = 3100
         
     def pid(self):
     
@@ -329,11 +329,6 @@ class Edrone():
         self.error[0] = (self.targets[self.targets_achieved][0] - self.location.longitude)*self.error_scaling
         self.error[1] = (self.targets[self.targets_achieved][1] - self.location.latitude)*self.error_scaling
         self.error[2] = self.targets[self.targets_achieved][2] - self.location.altitude
-        # if self.count!=1 : 
-       
-            # self.count = 1 
-        
-
 
         for i in range(3):
             # Cummulative error as sum of previous errors
@@ -345,15 +340,15 @@ class Edrone():
                 # print("Reset",self.cummulative_error[2])
             # print self.cummulative_error
         # Main PID Equation i.e assigning the output its value acc. to output = kp*error + kd*(error-previous_error) + ki*cummulative_error
-        self.update_const()
+        # self.update_const()
         for i in range(2):
             self.ouput[i] = self.Kp[i] * self.error[i] + self.Ki[i] * \
                 self.cummulative_error[i] + self.Kd[i] * \
                 (self.error[i]-self.previous_error[i])
         
-        self.ouput[2] = self.Kp[2] * self.error[2] + self.Ki[2] * self.cummulative_error[2] + self.Kd[2] *(self.error[2]-self.previous_error[2])*(abs(self.error[2]-self.previous_error[2])<3)
+        self.ouput[2] = self.Kp[2] * self.error[2] + self.Ki[2] * self.cummulative_error[2] + self.Kd[2] *(self.error[2]-self.previous_error[2])*(abs(self.error[2]-self.previous_error[2])<100)
         # Contoller handles the states of landing , takeoff, mid-air
-        self.controller()
+        # self.controller()
         # if self.start_to_check_for_obstacles:
         #     self.handle_obstacle_x_y()
 
@@ -549,13 +544,13 @@ class Edrone():
             # else:
             #     self.targets[0][2] = 30 + (15 + self.buiding_locations[self.marker_id][2] -30)*(self.buiding_locations[self.marker_id][2] + 15 > 30)
             #     self.targets[1][2] = 30 + (15 + self.buiding_locations[self.marker_id][2] -30)*(self.buiding_locations[self.marker_id][2] + 15 > 30)
-            self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 17
-            self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 17 
+            self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 5
+            self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 5 
         else:
             # self.targets[0][2] = self.buiding_locations[self.marker_id][2] + (15)*(self.buiding_locations[self.marker_id][2] + 15 > 30) + (30 - self.buiding_locations[self.marker_id][2])*(self.buiding_locations[self.marker_id][2] + 15 < 30)
             # self.targets[1][2] = self.buiding_locations[self.marker_id][2] + (15)*(self.buiding_locations[self.marker_id][2] + 15 > 30) + (30 - self.buiding_locations[self.marker_id][2])*(self.buiding_locations[self.marker_id][2] + 15 < 30)
-            self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 17
-            self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 17
+            self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 5
+            self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 5
         self.targets[2][2] = self.buiding_locations[self.marker_id][2]
         self.target_list()
         self.takeoff_control()

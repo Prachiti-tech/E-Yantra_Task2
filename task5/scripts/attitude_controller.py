@@ -75,9 +75,9 @@ class Edrone():
         # self.Kp = [49.8, 49.8, 0.06*500*46]
         # self.Ki = [0.0, 0.0, 0.008*57]
         # self.Kd = [400.5, 400.5, 0.3*500*15]
-        self.Kp = [3793*0.06, 3793*0.06, 5000*0.06]
-        self.Ki = [3*0.008,   3*0.008,    61*0.008]
-        self.Kd = [2293*0.3,  2293*0.3,   3100*0.3]
+        self.Kp = [3593*0.06, 3593*0.06, 5000*0.06]
+        self.Ki = [0,   0,    61*0.008]
+        self.Kd = [2593*0.3,  2593*0.3,   3100*0.3]
 
         # -----------------------Add other required variables for pid here ----------------------------------------------
 
@@ -123,8 +123,8 @@ class Edrone():
         rospy.Subscriber('/drone_command', edrone_cmd,
                          self.drone_command_callback)
         rospy.Subscriber('/edrone/imu/data', Imu, self.imu_callback)
-        # rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)
-        # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)
+        rospy.Subscriber('/pid_tuning_roll', PidTune, self.roll_set_pid)
+        rospy.Subscriber('/pid_tuning_pitch', PidTune, self.pitch_set_pid)
         # rospy.Subscriber('/pid_tuning_yaw', PidTune, self.yaw_set_pid)
         # ------------------------------------------------------------------------------------------------------------
 
@@ -172,7 +172,7 @@ class Edrone():
 
     def pid(self):
         # Converting quaternion to euler angles
-        (self.drone_orientation_euler[1], self.drone_orientation_euler[0], self.drone_orientation_euler[2]) = tf.transformations.euler_from_quaternion(
+        (self.drone_orientation_euler[0], self.drone_orientation_euler[1], self.drone_orientation_euler[2]) = tf.transformations.euler_from_quaternion(
             [self.drone_orientation_quaternion[0], self.drone_orientation_quaternion[1], self.drone_orientation_quaternion[2], self.drone_orientation_quaternion[3]])
 
         # Convertng the range from 1000 to 2000 in the range of -10 degree to 10 degree for roll axis
@@ -195,7 +195,7 @@ class Edrone():
         print self.cummulative_error, self.error
         # PID equations for R,P,Y : Output = kp*error + kd*(error-previous_error) + ki*cummulative_error
         for i in range(2):
-            self.ouput[i] = self.Kp[i] * self.error[i] + self.Kd[i] * (abs(self.error[i]-self.previous_error[i]) < 10)*(self.error[i]-self.previous_error[i]) + self.Ki[i] * self.cummulative_error[i]
+            self.ouput[i] = self.Kp[i] * self.error[i] + self.Kd[i] * (abs(self.error[i]-self.previous_error[i]) < 30)*(self.error[i]-self.previous_error[i]) + self.Ki[i] * self.cummulative_error[i]
 
         self.ouput[2] = self.Kp[2] * self.error[2] + self.Kd[2] * \
             (self.error[2]-self.previous_error[2]) + \
@@ -211,14 +211,10 @@ class Edrone():
         self.out_yaw = self.ouput[2]
 
         # Assigning the appropriate propeller speeds to balance the torque along correct axis , hence attitude control
-        self.pwm_cmd.prop1 = max(min(-self.out_roll + self.out_pitch -
-                                     self.out_yaw + self.throttle, self.max_values[0]), self.min_values[0])
-        self.pwm_cmd.prop2 = max(min(-self.out_roll - self.out_pitch +
-                                     self.out_yaw + self.throttle, self.max_values[1]), self.min_values[1])
-        self.pwm_cmd.prop3 = max(min(+self.out_roll - self.out_pitch -
-                                     self.out_yaw + self.throttle, self.max_values[2]), self.min_values[2])
-        self.pwm_cmd.prop4 = max(min(+self.out_roll + self.out_pitch +
-                                     self.out_yaw + self.throttle, self.max_values[3]), self.min_values[3])
+        self.pwm_cmd.prop1 = max(min(+self.out_roll - self.out_pitch - self.out_yaw + self.throttle, self.max_values[0]), self.min_values[0])
+        self.pwm_cmd.prop2 = max(min(-self.out_roll - self.out_pitch + self.out_yaw + self.throttle, self.max_values[1]), self.min_values[1])
+        self.pwm_cmd.prop3 = max(min(-self.out_roll + self.out_pitch - self.out_yaw + self.throttle, self.max_values[2]), self.min_values[2])
+        self.pwm_cmd.prop4 = max(min(+self.out_roll + self.out_pitch + self.out_yaw + self.throttle, self.max_values[3]), self.min_values[3])
 
         # Publishing the errors for plotjuggler
         self.yaw_error_pub.publish(self.out_yaw)
