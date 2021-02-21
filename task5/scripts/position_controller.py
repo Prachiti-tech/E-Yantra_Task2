@@ -79,7 +79,7 @@ class Edrone():
     def __init__(self):
 
         # Initializing ros node with name position_control
-        rospy.init_node('position_controller')
+        rospy.init_node('position_controller',log_level=rospy.DEBUG)
 
         # Creating an instance of NavSatFix message and edrone_cmd message
         self.location = NavSatFix()
@@ -98,7 +98,7 @@ class Edrone():
         self.gripper_data = False
 
         # A multiplication factor to increase number of waypoints proportional to distance between final and initial
-        self.stride = 1/10.0
+        self.stride = 0.01
 
         # Hardcoded initial target point
         """
@@ -116,7 +116,7 @@ class Edrone():
         self.targets = [
             [0.0, 0.0, 0.0],
             [0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0]
+            [0.0, 0.0, 0.0],
         ]
         self.targets =[[72.00021844008124, 18.999888790656602, 21.757981], [72.000156706, 18.999888790656602, 21.757981], [72.000156706, 18.9998373885, 16.757981]]
     
@@ -160,33 +160,28 @@ class Edrone():
         self.start_to_check_for_obstacles = False
 
         # Kp, Ki and Kd found out experimentally using PID tune
-        # self.Kp = [135000.0, 135000.0, 1082*0.06]
-        # self.Ki = [0.008*1000*2.05,        0.008*1000*2.05,         1*0.00008]
-        # self.Kd = [8293425.0, 8293425.0,  4476*0.3]
-        self.Kp = [0, 0,2533*0.06]
-        self.Ki = [0,        0,        371*0.008]
-        self.Kd = [0,0,4498*0.3*10]
-
-        self.error_scaling = 1000
-        # self.Kp = [20000.0, 20000.0,1082*0.06]
-        # self.Ki = [0.008*100,        0.008*100,         0.0*0.008]
-        # self.Kd = [0.3*10000*873, 0.3*10000*873,  4476*0.3]
+        # self.Kp = [125000.0, 125000.0, 1082*0.06]
+        # self.Ki = [0.008*10*1.05,        0.008*10*1.05,         0.0*0.008]
+        # self.Kd = [8493425, 8493425,  4476*0.3]
         # self.Kp = [0.06*1000*156*2*3*1.025, 0.06*1000*156*2*3*1.025, 1082*0.06]
         # self.Ki = [0.008*10*1.05,        0.008*10*1.05,         0.0*0.008]
         # self.Kd = [0.3*10000*873*3*1.025, 0.3*10000*873*3*1.025,  4476*0.3]
+        self.Kp = [88318,88318 ,1082*0.06]
+        self.Ki = [0.008*10,        0.008*10,         0.0*0.008]
+        self.Kd = [6606000, 6606000,  4476*0.3]
         # Output, Error ,Cummulative Error and Previous Error of the PID equation in the form [Long, Lat, Alt]
         self.error = [0.0, 0.0, 0.0]
         self.ouput = [0.0, 0.0, 0.0]
         self.cummulative_error = [0.0, 0.0, 0.0]
         self.previous_error = [0.0, 0.0, 0.0]
-        self.max_cummulative_error = [100, 100, 100]
+        self.max_cummulative_error = [1e-3, 1e-3, 100]
         self.throttle = 0
         self.base_pwm = 1500
         # ----------------------------------------------------------------------------------------------------------
 
         # Allowed errors in long.,and lat.
-        self.allowed_lon_error = 0.047487/4
-        self.allowed_lat_error = 0.04517/4
+        self.allowed_lon_error = 0.0000047487/6
+        self.allowed_lat_error = 0.000004517/6
 
         # Checking if we have to scan or Land
         self.scan = False
@@ -195,7 +190,8 @@ class Edrone():
         #Constraining the no of times location_error has been called
         self.count = 0
         # Time in which PID algorithm runs
-        self.pid_break_time = 0.0160  # in seconds
+        self.pid_break_time = 0.060  # in seconds
+        self.x = 0 
 
         # Publishing servo-control messaages and altitude,longitude,latitude and zero error on errors /drone_command, /alt_error, /long_error, /lat_error, and current marker id
         self.drone_pub = rospy.Publisher(
@@ -214,7 +210,7 @@ class Edrone():
         rospy.Subscriber('/pid_tuning_altitude',
                          PidTune, self.altitude_set_pid)
         rospy.Subscriber('/pid_tuning_roll', PidTune, self.long_set_pid)
-        # rospy.Subscriber('/pid_tuning_pitch', PidTune, self.lat_set_pid)
+        rospy.Subscriber('/pid_tuning_pitch', PidTune, self.lat_set_pid)
         rospy.Subscriber('/edrone/location_custom',
                          location_custom, self.scanQR)
         rospy.Subscriber('/edrone/range_finder_bottom',
@@ -238,25 +234,23 @@ class Edrone():
     # Callback function for /pid_tuning_altitude in case required
     # This function gets executed each time when /tune_pid publishes /pid_tuning_altitude
     def altitude_set_pid(self, alt):
-        self.Kp[2] = alt.Kp * 0.06
-        self.Ki[2] = alt.Ki * 0.008
-        self.Kd[2] = alt.Kd * 0.3*10
+        self.Kp = alt.Kp * 0.06
+        self.Ki = alt.Ki * 0.008
+        self.Kd = alt.Kd * 0.3
 
     # Callback function for longitude tuning in case required
     # This function gets executed each time when /tune_pid publishes /pid_tuning_roll
     def long_set_pid(self, long):
-        self.Kp[0] = long.Kp * 0.06
+        self.Kp[0] = long.Kp * 0.06*1000
         self.Ki[0] = long.Ki * 0.008
-        self.Kd[0] = long.Kd * 3
-        self.Kp[1] = long.Kp * 0.06
-        self.Ki[1] = long.Ki * 0.008
-        self.Kd[1] = long.Kd * 3
+        self.Kd[0] = long.Kd * 0.3*10000
+
     # Callback function for latitude tuning in case required
     # This function gets executed each time when /tune_pid publishes /pid_tuning_pitch
     def lat_set_pid(self, lat):
-        self.Kp[1] = lat.Kp * 0.06
-        self.Ki[1] = lat.Ki * 0.008
-        self.Kd[1] = lat.Kd * 3
+        self.Kp[1] = lat.Kp * 0.06*1000
+        self.Ki[1] = lat.Ki * 0.008*1000
+        self.Kd[1] = lat.Kd * 0.3*10000
 
     # Callback for qr code scanner
     def scanQR(self, msg):
@@ -309,63 +303,60 @@ class Edrone():
         return self.err_y_m/(-105292.0089353767)
 
     # ----------------------------------------------------------------------------------------------------------------------
-    def update_const(self):
-        self.Kp[2] = 21
-        self.Ki[2] =0.05
-        
-        # if self.Kp[2] > 21 :
-        #     self.Kp[2] = 21
-        # if self. Kp[2] < 9:
-        #     self.Kp[2] = 9
-        
-        # self.Kd[2] = pow(self.error[2],2) - 3*self.error[2] + 2920
-        # if self.Kd[2] < 2930 :
-        #     self.Kd[2] = 2930
-        # if self. Kd[2] > 3100:
-        self.Kd[2] = 3100
-        
+
     def pid(self):
-    
+
         # Error is defined as setpoint minus current orientaion
-        self.error[0] = (-self.targets[self.targets_achieved][0] + self.location.longitude)*self.error_scaling
-        self.error[1] = (-self.targets[self.targets_achieved][1] + self.location.latitude)*self.error_scaling
-        self.error[2] = self.targets[self.targets_achieved][2] - self.location.altitude
+        self.error[0] = self.location.longitude - \
+            self.targets[self.targets_achieved][0]
+        self.error[1] = self.location.latitude - \
+            self.targets[self.targets_achieved][1]
+        self.error[2] = self.location.altitude - \
+            self.targets[self.targets_achieved][2]
+        
+        # if self.error[2] > 5 :
+        #     self.error[2] = 5
+        # if self.error < -5 and (self.states == 2 or self.states == 5):
+        #     self.error = -5 
+        max_err_0 = self.previous_error[0]*(self.count==1)
+        max_err_0 = max(max_err_0,self.error[0])
+        rospy.logdebug("Max error: {}".format(max_err_0)) 
+        if abs(self.error[0])>=0.00038256625782:
+            rospy.logdebug("long error: {}".format(self.error[0]))
+            self.error[0] =(0.000118256625782/3)*math.copysign(1.0,self.error[0])
+        # if abs(self.error[1])>0.001/2:
+        #     self.error[1] = 0.001/2*math.copysign(1,self.error[1])
 
         for i in range(3):
             # Cummulative error as sum of previous errors
             self.cummulative_error[i] += self.error[i]
-            # print("Current",self.cummulative_error[2])
             # Limiting the cummulative error
             if abs(self.cummulative_error[i]) >= self.max_cummulative_error[i]:
-                self.cummulative_error[i] = self.error[i]
-                # print("Reset",self.cummulative_error[2])
-            # print self.cummulative_error
+                self.cummulative_error[i] = 0.0
+
         # Main PID Equation i.e assigning the output its value acc. to output = kp*error + kd*(error-previous_error) + ki*cummulative_error
-        # self.update_const()
-        for i in range(2):
+        for i in range(3):
             self.ouput[i] = self.Kp[i] * self.error[i] + self.Ki[i] * \
                 self.cummulative_error[i] + self.Kd[i] * \
                 (self.error[i]-self.previous_error[i])
-        
-        self.ouput[2] = self.Kp[2] * self.error[2] + self.Ki[2] * self.cummulative_error[2] + self.Kd[2] *(self.error[2]-self.previous_error[2])*(abs(self.error[2]-self.previous_error[2])<100)
-        print self.ouput[0]
+
         # Contoller handles the states of landing , takeoff, mid-air
         self.controller()
-        # if self.start_to_check_for_obstacles:
-        #     self.handle_obstacle_x_y()
+        if self.start_to_check_for_obstacles:
+            self.handle_obstacle_x_y()
 
         # Storing Previous Error values for differential error
         for i in range(3):
             self.previous_error[i] = self.error[i]
 
         # Setting the throttle that balances the error
-        self.drone_cmd.rcThrottle = self.base_pwm + self.ouput[2]
+        self.drone_cmd.rcThrottle = self.base_pwm - self.ouput[2]
 
         # CLamping the throttle values between 1000 and 2000
         if self.drone_cmd.rcThrottle > 2000:
             self.drone_cmd.rcThrottle = 2000
-        elif self.drone_cmd.rcThrottle < 1000.0:
-            self.drone_cmd.rcThrottle = 1000.0
+        elif self.drone_cmd.rcThrottle < 1010:
+            self.drone_cmd.rcThrottle = 1010
 
         # Publishing the Drone commands for R,P,Y of drone
         self.drone_pub.publish(self.drone_cmd)
@@ -381,23 +372,21 @@ class Edrone():
         self.states = i
         
     def controller(self):
-        self.alt_diff.publish(abs(self.location.altitude-self.targets[-1][2]))
-        print(self.targets_achieved,self.n, self.states)
+        
+        rospy.logdebug("Targets_achieved,n,states,x: {},{},{},{}".format(self.targets_achieved, self.n,self.states, self.x))
+        self.alt_diff.publish(self.location.altitude-self.buiding_locations[self.marker_id][2])
         # Checking if the drone has reached the nth checkpoint and then incrementing the counter by 1
         # As stated in the problem statement , we have a permissible error of +- 0.05
-        if self.location.altitude > self.targets[self.targets_achieved][2]-0.5 and self.location.altitude < self.targets[self.targets_achieved][2]+0.5 and self.targets_achieved == 0:
-            if round(self.previous_error[2], 2) == round(self.error[2], 2) and round(0.2, 2) > abs(self.error[2]):
+        if self.location.altitude > self.targets[self.targets_achieved][2] - 1 and self.location.altitude < self.targets[self.targets_achieved][2] + 1 and self.targets_achieved == 0:
+            if round(self.previous_error[2], 1) == round(self.error[2], 1) and round(0.2, 1) > abs(self.error[2]):
 
                 # Incrementing the counter of waypoints
                 self.targets_achieved += 1
-                print("in takeoff")
+                rospy.logdebug("in takeoff")
                 if self.states == 0:
                     #
                     self.control_state(1)
                     self.count = 0
-                    # self.Kp = [0.06*1000*156*2, 0.06*1000*156*2,1082*0.06]
-                    # self.Ki = [0.008*10,        0.008*10,         0.0*0.008]
-                    # self.Kd = [0.3*10000*873, 0.3*10000*873,  4476*0.3]
                 else:
                     self.control_state(4)
                     self.count = 0
@@ -405,16 +394,17 @@ class Edrone():
                 if self.n < 0:
                     self.n = 0
                     
-                if self.n!=0 and self.states!=5:
-                    self.allowed_lon_error = 0.000047487*self.error_scaling
-                    self.allowed_lat_error = 0.00004517*self.error_scaling
-                    # pass
+                # if self.n!=0 and self.states!=5:
+                #     self.allowed_lon_error = 0.000047487
+                #     self.allowed_lat_error = 0.00004517
+                #     print("Error ON")
+                #     self.x = 1
                 # else :
                 #     self.allowed_lon_error = 0.000047487 / 4
                 #     self.allowed_lat_error = 0.00004517 / 4
                 # Specifying the values for R,P,Y
-                self.drone_cmd.rcRoll = self.base_pwm + self.ouput[1]
-                self.drone_cmd.rcPitch = self.base_pwm + self.ouput[0]
+                self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
+                self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
                 self.start_to_check_for_obstacles = True
 
         # Checking if the drone has reached the lat and long then imcrementing the counter
@@ -426,26 +416,19 @@ class Edrone():
                     self.targets_achieved += 1
                     
                     # Specifying the values for R,P,Y
-                    self.drone_cmd.rcRoll = self.base_pwm + self.ouput[0]
-                    self.drone_cmd.rcPitch = self.base_pwm + self.ouput[1]
-                    if (self.targets_achieved == self.n and self.n == 0 ) or self.targets_achieved == self.n+1:
+                    self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
+                    self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
+                    if self.targets_achieved == self.n:
                         if self.states == 1:
                             #Updating the state of the drone from transvering to landing
                             self.control_state(2)
                         elif self.states == 4:
                             #Updating the state of the drone from transvering with package to landing with package
                             self.control_state(5)
-                            # self.Kp = [125000.0, 125000.0, 1082*0.06]
-                            # self.Ki = [0.008*10*1.05,        0.008*10*1.05,         0.0*0.008]
-                            # self.Kd = [8493425, 8493425,  4476*0.3]
-                    if self.targets_achieved == self.n and self.states == 2:
+                    if self.targets_achieved == self.n-1 and self.states == 2:
                         self.allowed_lon_error = 0.0000047487/4
                         self.allowed_lat_error = 0.000004517/4
-                    if self.n == 0:
-                        pass
-                        # self.Kp = [125000.0, 125000.0, 1082*0.06]
-                        # self.Ki = [0.008*10*1.05,0.008*10*1.05,0.0*0.008]
-                        # self.Kd = [8493425, 8493425,  4476*0.3]         
+                        self.x = 0
                         
                     self.start_to_check_for_obstacles = True
                     # print "Navigating around"
@@ -467,61 +450,69 @@ class Edrone():
             # If all the waypoints are reached
             elif self.targets_achieved >= self.n+1:
                 if self.states == 1:
-                    self.allowed_lon_error = 0.0000047487/4
-                    self.allowed_lat_error = 0.000004517/4
                     #Updating the state of the drone from takeoff to transversing
                     self.control_state(2)
                 elif self.states == 4:
                     #Updating the state of the drone from takeoff with package to tranversing with package 
-                    self.allowed_lon_error = 0.0000047487/4
-                    self.allowed_lat_error = 0.000004517/4
                     self.control_state(5)
                 # Specifying the values for R,P,Y
-                self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
-                self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
+                if self.targets_achieved != self.n+2:
+                    self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
+                    self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
+                else:
+                    self.drone_cmd.rcRoll = self.base_pwm
+                    self.drone_cmd.rcPitch = self.base_pwm 
+
                 # Check if it reached correct location
                 if self.location.latitude > self.targets[self.targets_achieved][1]-self.allowed_lat_error and self.location.latitude < self.targets[self.targets_achieved][1]+self.allowed_lat_error:
-                    if round(self.previous_error[0], 7) == round(self.error[0], 7) and round(self.allowed_lat_error, 8) > abs(self.error[0]):
-                        if self.location.longitude > self.targets[self.targets_achieved][0]-self.allowed_lon_error and self.location.longitude < self.targets[self.targets_achieved][0]+self.allowed_lon_error:
-                            if round(self.previous_error[1], 7) == round(self.error[1], 7) and round(self.allowed_lat_error, 8) > abs(self.error[1]):
-                                # self.allowed_lon_error = 0.000047487
-                                # self.allowed_lat_error = 0.00004517
-                                # Function controls the landing, scanning and gripping of the drone
-                                self.targets_achieved = self.n+2
-                                self.landing_control()
+                    
+                    # If gripper is activated
+                    if self.bottom_count > 0:
+                        rospy.loginfo("Marker reached")
 
-                                # Handling multiple markers
-                                if self.box_grabbed == 1 and self.states == 5 and self.buiding_locations[self.marker_id][3] != "RETURN ": 
-                                    self.handle_marker()
+                    if round(self.previous_error[1], 7) == round(self.error[1], 7) and round(self.allowed_lat_error, 8) > abs(self.error[1]):
+                        if self.location.longitude > self.targets[self.targets_achieved][0]-self.allowed_lon_error and self.location.longitude < self.targets[self.targets_achieved][0]+self.allowed_lon_error:
+
+                            # Function controls the landing, scanning and gripping of the drop
+                            # if self.targets_achieved != self.n+3:
+                            self.targets_achieved = self.n+2
+                            self.landing_control()
+
+                            # Handling multiple markers
+                            if self.box_grabbed == 1 and self.states == 5 and self.buiding_locations[self.marker_id][3] != "RETURN ": 
+                                self.handle_marker()
 
     def handle_marker(self):
+        rospy.logdebug("In Handle marker, marker id: {}".format(self.marker_id))
         # Check if errors are within given 0.2 m threshold
         if abs(self.err_x_m) < 0.2 and abs(self.err_y_m) < 0.2 and (self.location.altitude > self.targets[self.targets_achieved][2]-0.05 and self.location.altitude < self.targets[self.targets_achieved][2]+0.05):
-            print "Errors in X and Y in meters are {}, {} ".format(
-                self.err_x_m, self.err_y_m)
-            self.targets[-1][2] = self.location.altitude - self.range_finder_bottom
-            self.buiding_locations[self.marker_id][2] = self.targets[-1][2] 
+            rospy.logdebug("Errors in X and Y in meters are {}, {} ".format(
+                self.err_x_m, self.err_y_m))
+            
             # If marker id (0,1,2,3,4,5,6) is 6 then it has achieved all the markers
-            if self.marker_id == 18:
-                print "All the targets achieved"
+            if self.marker_id == 16:
+                rospy.loginfo("All the targets achieved")
                 self.landing_control()
                 return
             #if marker <6 new target building will be provided
-            elif self.marker_id < 18 and self.gripper_data :
-                print("New building")
+            elif self.marker_id < 16:
+                rospy.loginfo("New building")
                 self.activate_gripper(shall_i=False)
                 self.box_grabbed = 0
                 self.bottom_count = 0
-                self.marker_id += 1
-                self.set_new_building_as_target()
-                #Updating the state of the drone from landing with package to takeoff
-                self.control_state(0)
+                if self.gripper_data:
+                    self.marker_id += 1
+                    self.set_new_building_as_target()
+                    #Updating the state of the drone from landing with package to takeoff
+                    self.control_state(0)
 
         elif abs(self.err_x_m) < 0.2 and abs(self.err_y_m) < 0.2 :
+            rospy.logdebug("x err , y err : {},{}".format(self.err_x_m,self.err_y_m))
+            rospy.logdebug("self.targets[self.targets_achieved] : {}".format(self.targets[self.targets_achieved]))
             self.targets_achieved = 2
             
         else:
-            print "Navigating Drone to marker position"
+            rospy.loginfo("Navigating Drone to marker position")
             if self.count == 0:
                 self.set_location_using_err()
                 self.count = 1
@@ -539,23 +530,30 @@ class Edrone():
         self.targets[1][0] = self.buiding_locations[self.marker_id][0]
         self.targets[1][1] = self.buiding_locations[self.marker_id][1]
         self.targets[2][0] = self.buiding_locations[self.marker_id][0]
-        self.targets[2][1] = self.buiding_locations[self.marker_id][1]     
-        if self.targets[2][2] > self.buiding_locations[self.marker_id][2]: 
+        self.targets[2][1] = self.buiding_locations[self.marker_id][1]   
+        # self.targets[3][0] = self.buiding_locations[self.marker_id][0]
+        # self.targets[3][1] = self.buiding_locations[self.marker_id][1]     
+        if self.targets[2][2] > self.buiding_locations[self.marker_id][2]:
             # if self.targets[2][2] > 30 :
             #     self.targets[0][2] = self.targets[2][2] + (15 + self.buiding_locations[self.marker_id][2] -30)*(self.buiding_locations[self.marker_id][2] + 10 > 30) + 15*(self.buiding_locations[self.marker_id][2] + 15 < 30) 
             #     self.targets[1][2] = self.targets[2][2] + (15 + self.buiding_locations[self.marker_id][2] -30)*(self.buiding_locations[self.marker_id][2] + 10 > 30) + 15*(self.buiding_locations[self.marker_id][2] + 15 < 30) 
             # else:
             #     self.targets[0][2] = 30 + (15 + self.buiding_locations[self.marker_id][2] -30)*(self.buiding_locations[self.marker_id][2] + 15 > 30)
             #     self.targets[1][2] = 30 + (15 + self.buiding_locations[self.marker_id][2] -30)*(self.buiding_locations[self.marker_id][2] + 15 > 30)
-            self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 5
-            self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 5 
+            self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 10
+            self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 10 
         else:
             # self.targets[0][2] = self.buiding_locations[self.marker_id][2] + (15)*(self.buiding_locations[self.marker_id][2] + 15 > 30) + (30 - self.buiding_locations[self.marker_id][2])*(self.buiding_locations[self.marker_id][2] + 15 < 30)
             # self.targets[1][2] = self.buiding_locations[self.marker_id][2] + (15)*(self.buiding_locations[self.marker_id][2] + 15 > 30) + (30 - self.buiding_locations[self.marker_id][2])*(self.buiding_locations[self.marker_id][2] + 15 < 30)
-            self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 5
-            self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 5
+            self.targets[0][2] = self.buiding_locations[self.marker_id][2] + 10
+            self.targets[1][2] = self.buiding_locations[self.marker_id][2] + 10
         self.targets[2][2] = self.buiding_locations[self.marker_id][2]
+        # if self.targets[1][2] - self.targets[3][2] > 15 :
+        #     self.targets[2][2] = self.buiding_locations[self.marker_id][2] + 15
+        # else :
+        #     self.targets[2][2] = self.buiding_locations[self.marker_id][2] + 15
         self.target_list()
+        # print(self.targets)
         self.takeoff_control()
 
     def set_location_using_err(self):
@@ -580,19 +578,18 @@ class Edrone():
         if no:
             nothing
         """
-        # print  self.range_finder_top_list[0] ,self.range_finder_top_list[4]
         front_range_finder_avg = (
-            self.range_finder_top_list[0]*(self.range_finder_top_list[0]>0.3 and self.range_finder_top_list[0]<8) + self.range_finder_top_list[4]*(self.range_finder_top_list[4]<8))/2
+            self.range_finder_top_list[0] + self.range_finder_top_list[4])/2
 
-        left = self.range_finder_top_list[3] < 6  and self.range_finder_top_list[3]>3
-        right =  self.range_finder_top_list[1] < 6  and self.range_finder_top_list[1]>3
+        left = self.range_finder_top_list[3] < 5  and self.range_finder_top_list[3]>3
+        right =  self.range_finder_top_list[1] < 5  and self.range_finder_top_list[1]>3
         front = front_range_finder_avg < 4 and front_range_finder_avg > 1
 
         #handling obstacle for left range finder
         if left and (not right) and (not front):
             # self.obstacle_count += 1
             # if self.obstacle_count > 3:
-            print "Handling obstacle due to left rangefinder"
+            rospy.loginfo("Handling obstacle due to left rangefinder")
             self.targets_achieved = 1
             self.provide_current_loc_as_target(-0.8)
                 # self.obstacle_count = 3
@@ -601,14 +598,14 @@ class Edrone():
         if right and (not left) and (not front):
             # self.obstacle_count += 1
             # if self.obstacle_count > 0:
-            print "Handling obstacle due to right rangefinder"
+            rospy.loginfo("Handling obstacle due to right rangefinder")
             self.targets_achieved = 1
             self.provide_current_loc_as_target(0.8)
                 # self.obstacle_count = 3
 
         #handling obstacle for front range finder
         if front and (not right) and (not left) :
-            print "Handling obstacle due to front rangefinder"
+            rospy.loginfo("Handling obstacle due to front rangefinder")
             self.delete_inserted()
             self.targets[0][0] = self.location.longitude+1.5*(self.safe_dist_long)
             self.targets[0][1] = self.location.latitude -self.safe_dist_lat/5
@@ -625,24 +622,23 @@ class Edrone():
 
     # --------------------------------HANDLING LANDING SCANNING AND GRIPPING-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def landing_control(self):
-        print("In landing control")
+        rospy.logdebug("In landing control")
         # checking if the box is scanned
-        # self.drone_cmd.rcRoll = self.base_pwm-self.ouput[0]
-        # self.drone_cmd.rcPitch = self.base_pwm-self.ouput[1]
-        # self.drone_cmd.rcYaw = self.base_pwm
-
         if self.scan == True and self.states == 2:
             self.targets[self.targets_achieved][2] -= self.range_finder_bottom
+            self.drone_cmd.rcRoll = self.base_pwm
+            self.drone_cmd.rcPitch = self.base_pwm
+            self.drone_cmd.rcYaw = self.base_pwm
             if self.bottom_count == 0:
-                print "Image Scanned. Targets acquired."
+                rospy.logdebug("Image Scanned. Targets acquired.")
                 self.targets[self.targets_achieved][2] -= self.range_finder_bottom
 
                 # checking if the drone is properly aligned for the box to be gripped
                 if not self.gripper_data:
-                    # self.drone_cmd.rcRoll = self.base_pwm-self.ouput[0]
-                    # self.drone_cmd.rcPitch = self.base_pwm-self.ouput[1]
-                    # self.drone_cmd.rcYaw = self.base_pwm
-                    print "Waiting to get aligned"
+                    self.drone_cmd.rcRoll = self.base_pwm
+                    self.drone_cmd.rcPitch = self.base_pwm
+                    self.drone_cmd.rcYaw = self.base_pwm
+                    rospy.logdebug("Waiting to get aligned")
                 else:
                     self.activate_gripper(shall_i=True)
                     if self.gripper_data and self.states == 2:
@@ -653,36 +649,36 @@ class Edrone():
                         self.control_state(3)
                         self.bottom_count = 1
                         self.box_grabbed = 1
-        
         elif self.buiding_locations[self.marker_id][3] == "RETURN " and self.states == 5:
             self.targets[self.targets_achieved][2] -= self.range_finder_bottom 
-            # self.drone_cmd.rcRoll = self.base_pwm-self.ouput[0]
-            # self.drone_cmd.rcPitch = self.base_pwm-self.ouput[1]
+            self.drone_cmd.rcRoll = self.base_pwm
+            self.drone_cmd.rcPitch = self.base_pwm
             self.drone_cmd.rcYaw = self.base_pwm
             if self.location.altitude-self.buiding_locations[self.marker_id][2] < 1:
                 self.activate_gripper(shall_i=False)
                 self.box_grabbed = 0
                 self.bottom_count = 0
-                if self.gripper_data:
-                    self.marker_id += 1
-                    self.set_new_building_as_target()
-                    #Updating the state of the drone from landing with package to takeoff
-                    self.control_state(0)
-
+                self.marker_id += 1
+                self.set_new_building_as_target()
+                #Updating the state of the drone from landing with package to takeoff
+                self.control_state(0)
         # Landing the drone
         else:
-            pass
-            # self.drone_cmd.rcRoll = self.base_pwm-self.ouput[0]
-            # self.drone_cmd.rcPitch = self.base_pwm-self.ouput[1]
-            # self.drone_cmd.rcYaw = self.base_pwm
-            
+            rospy.logdebug("no scan")
+            self.drone_cmd.rcRoll = self.base_pwm
+            self.drone_cmd.rcPitch = self.base_pwm
+            self.drone_cmd.rcYaw = self.base_pwm
+            # if self.location.altitude > self.targets[self.targets_achieved][2] - 2 and self.location.altitude < self.targets[self.targets_achieved][2] + 2:
+            #     if self.targets_achieved == self.n+2:
+            #         self.targets_achieved = self.n+3
+
 
         # Changing the allowed error to its maximum once the box is picked up to fast up the drone
         if self.gripper_data:
             self.allowed_lat_error = 0.000004517/2
             self.allowed_lon_error = 0.0000047487/2
 
-        if self.marker_id == 7:
+        if self.marker_id == 19:
             self.csv_counter == -1
             return
 
@@ -696,7 +692,7 @@ class Edrone():
     # ----------------------------------------HANDLING WAYPOINTS SUBSTITUTION---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     def delete_inserted(self):
         # Deleting the inserted waypoints
-        del self.targets[1:-2]
+        del self.targets[1:-3]
 
     def target_refresh(self):
         # Coordinates of 0th new are co-ordinates of last old +- altitude
@@ -704,9 +700,15 @@ class Edrone():
         self.targets[0][1] = self.targets[2][1]
         self.targets[1][0] = self.scanned_target[1]
         self.targets[1][1] = self.scanned_target[0]
-        self.targets[2][0] = self.scanned_target[1]
-        self.targets[2][1] = self.scanned_target[0]
+        # self.targets[3][0] = self.scanned_target[1]
+        # self.targets[3][1] = self.scanned_target[0]
         self.targets[2][2] = self.scanned_target[2]
+        self.target[2][0] = self.scanned_target[1]
+        self.target[2][1] = self.scanned_target[0]
+        # if self.targets[1][2] - self.targets[3][2] > 15 :
+        #     self.targets[2][2] = self.scanned_target[2] + 15
+        # else :
+        #     self.targets[3][2] = self.scanned_target[2]
         if self.scanned_target[2] > self.targets[0][2]:
             self.targets[0][2] = self.scanned_target[2] + self.offset_alt
             self.targets[1][2] = self.scanned_target[2] + self.offset_alt
@@ -722,14 +724,14 @@ class Edrone():
 
         # getting the coordinates for destiantion point
         ToX, ToY, alt1 = self.targets[1]
-        last_alt = self.targets[2][-1]
+        last_alt = self.targets[-1][-1]
         # Finding the distance between them
         dist = math.sqrt(pow((110692.0702932625 * (PosX-ToX)), 2) +
                          pow((-105292.0089353767 * (PosY-ToY)), 2))
 
         # Defining the number of waypoints to be inserted between current and goal location
         self.n = int(math.floor(dist*self.stride))
-        print self.n, dist
+
         # Initialize list
         points = [[0.0, 0.0, 0.0] for i in range(self.n)]
 
@@ -746,55 +748,59 @@ class Edrone():
 
     #Reading coordinates of cells through csv file
     def get_gps_coordinates(self):
+        # print("Yoooo")
         path = rospkg.RosPack().get_path("vitarana_drone")
         path = os.path.join(path,"scripts/manifest.csv")
         # self.targets.append([0.0, 0.0, 0.0])
+        deliveries = []
+        returns = []
+        rows={'1': 72.000142461, '2': 72.000142461 + (0.000014245), '3': 72.000142461 + (2*0.000014245)}
+        columns={'A': 18.9998102845, 'B': 18.9998102845 + (0.000013552), 'C': 18.9998102845 + (2*0.000013552)}
+        return_rows={'1': 72.000142461, '2': 72.000142461 + (0.000014245), '3': 72.000142461 + (2*0.000014245)}
+        return_columns={'X': 18.9999367615, 'Y': 18.9999367615 + (0.000013552), 'Z': 18.9999367615 + (2*0.000013552)}
+
+        #Altitude is constant for all cells since the grid is planar
+        altitude=16.757981
+        list_of_contents=[]
         with open(path,'r') as file:
             csvreader = csv.reader(file)
 
             #list of rows in csv file
-            list_of_contents=list(csvreader)
-            deliveries = []
-            returns = []
-            rows={'1': 72.000142461, '2': 72.000142461 + (0.000014245), '3': 72.000142461 + (2*0.000014245)}
-            columns={'A': 18.9998102845, 'B': 18.9998102845 + (0.000013552), 'C': 18.9998102845 + (2*0.000013552)}
-            return_rows={'1': 72.000142461, '2': 72.000142461 + (0.000014245), '3': 72.000142461 + (2*0.000014245)}
-            return_columns={'X': 18.9999367615, 'Y': 18.9999367615 + (0.000013552), 'Z': 18.9999367615 + (2*0.000013552)}
+            list_of_contents.extend(list(csvreader))
+        
+        for i in range(len(list_of_contents)):
+            # print(list_of_contents[i])
+            if list_of_contents[i][0] == "DELIVERY":
+                cell = list_of_contents[i][1]
+                coordinate = [rows[cell[1]],columns[cell[0]],altitude,list_of_contents[i][0]]
+                self.buiding_locations.append(coordinate)
+                coordinate = [float(item) for item in list_of_contents[i][2].split(";")]
+                z = coordinate[0]
+                coordinate[0] = coordinate[1]
+                coordinate[1] = z
+                coordinate.append(list_of_contents[i][0])
+                self.buiding_locations.append(coordinate)
 
-            #Altitude is constant for all cells since the grid is planar
-            altitude=16.757981
-            for i in range(len(list_of_contents)):
-                if list_of_contents[i][0] == "DELIVERY":
-                    cell = list_of_contents[i][1]
-                    coordinate = [rows[cell[1]],columns[cell[0]],altitude,list_of_contents[i][0]]
-                    self.buiding_locations.append(coordinate)
-                    coordinate = [float(item) for item in list_of_contents[i][2].split(";")]
-                    z = coordinate[0]
-                    coordinate[0] = coordinate[1]
-                    coordinate[1] = z
-                    coordinate.append(list_of_contents[i][0])
-                    self.buiding_locations.append(coordinate)
+            else: 
+                coordinate = [float(item) for item in list_of_contents[i][1].split(";")]
+                z = coordinate[0]
+                coordinate[0] = coordinate[1]
+                coordinate[1] = z
+                coordinate.append(list_of_contents[i][0])
+                self.buiding_locations.append(coordinate)
+                cell = list_of_contents[i][2]
+                coordinate = [return_rows[cell[1]],return_columns[cell[0]],altitude,list_of_contents[i][0]]
+                self.buiding_locations.append(coordinate)
+        self.targets[2] = [self.location.longitude,self.location.latitude,self.location.altitude]
+        self.set_new_building_as_target()
+        rospy.logdebug("targets : ".format(self.targets))
 
-                else: 
-                    coordinate = [float(item) for item in list_of_contents[i][1].split(";")]
-                    z = coordinate[0]
-                    coordinate[0] = coordinate[1]
-                    coordinate[1] = z
-                    coordinate.append(list_of_contents[i][0])
-                    self.buiding_locations.append(coordinate)
-                    cell = list_of_contents[i][2]
-                    coordinate = [return_rows[cell[1]],return_columns[cell[0]],altitude,list_of_contents[i][0]]
-                    self.buiding_locations.append(coordinate)
-            self.targets[0] = [self.location.longitude,self.location.latitude,self.location.altitude +10]
-            print(self.targets)
-            self.marker_id = 1
-            self.set_new_building_as_target()
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 if __name__ == '__main__':
     # Waiting for Gazebo to start
-    time.sleep(0.5)
+    # time.sleep(0.5)
 
     # Creating an instance of the above class
     e_drone = Edrone()

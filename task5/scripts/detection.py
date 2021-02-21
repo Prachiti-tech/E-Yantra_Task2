@@ -10,6 +10,8 @@ from sensor_msgs.msg import Image,LaserScan
 from cv_bridge import CvBridge, CvBridgeError
 import numpy as np
 import time
+import os
+import rospkg
 
 class Marker():
     """
@@ -24,14 +26,16 @@ class Marker():
         self.hfov_rad = 1.3962634
 
         # Initiate x & y errors to large values
-        self.err_x_m = 10000000.0
-        self.err_y_m = 10000000.0
+        self.err_x_m = 0.0
+        self.err_y_m = 0.0
 
         # Create a CvBridge object
         self.bridge = CvBridge()
 
         # Importing Cascade xml
-        self.logo_cascade = cv2.CascadeClassifier('/home/saad/catkin_ws/src/vitarana_drone/scripts/cascade.xml')
+        path = rospkg.RosPack().get_path("vitarana_drone")
+        path = os.path.join(path,"scripts/cascade.xml")
+        self.logo_cascade = cv2.CascadeClassifier(path)
 
         # Create an empty ndarray
         self.img = np.empty([])
@@ -55,14 +59,13 @@ class Marker():
         self.y_err_pub = rospy.Publisher("/edrone/err_y_m",data_class=Float32,queue_size=1)
     
     def alt_diff(self,msg):
-        #self.Z_m = msg.data
-	None
+        self.Z_m = msg.data
     
     # Callback for bottom rangefinder
     def range_bottom(self, msg):
         # Check if range is a feasible number
         if not math.isinf(msg.ranges[0]):
-            self.Z_m = msg.ranges[0]
+            # self.Z_m = msg.ranges[0]
             None
 
     # Callback function of camera topic
@@ -102,12 +105,11 @@ class Marker():
 
     def pub(self):
         # Publishing obtained values
-        print(self.err_x_m,self.err_y_m)
         self.x_err_pub.publish(self.err_x_m)
         self.y_err_pub.publish(self.err_y_m)
 
 if __name__ == "__main__" :
-    time.sleep(0.5)
+    # time.sleep(0.5)
     marker = Marker()
     rate = rospy.Rate(1)
     while not rospy.is_shutdown():
