@@ -15,6 +15,8 @@ import numpy as np
 import csv
 import os
 import rospkg
+from collections import OrderedDict
+import sys
 
 class Edrone():
     """
@@ -746,7 +748,6 @@ class Edrone():
 
     #Reading coordinates of cells through csv file
     def get_gps_coordinates(self):
-        # print("Yoooo")
         path = rospkg.RosPack().get_path("vitarana_drone")
         path = os.path.join(path,"scripts/manifest.csv")
         # self.targets.append([0.0, 0.0, 0.0])
@@ -760,25 +761,37 @@ class Edrone():
         #Altitude is constant for all cells since the grid is planar
         altitude=16.757981
         list_of_contents=[]
+        lines_count = 0
         with open(path,'r') as file:
             csvreader = csv.reader(file)
-
+            
             #list of rows in csv file
-            list_of_contents.extend(list(csvreader))
+            for row in csvreader:
+                lines_count+=1
+                rospy.logdebug("CSV: {} {} {}".format(csvreader.line_num,row,lines_count))
+                list_of_contents.append(row)
+            if lines_count==18:
+                rospy.logdebug("CSV reading done")
+                # return
+                pass
         
+        rospy.logdebug("List of contents: {}".format(list_of_contents))
+        rospy.logdebug("lenght List of contents: {}".format(len(list_of_contents)))
         for i in range(len(list_of_contents)):
-            # print(list_of_contents[i])
             if list_of_contents[i][0] == "DELIVERY":
                 cell = list_of_contents[i][1]
                 coordinate = [rows[cell[1]],columns[cell[0]],altitude,list_of_contents[i][0]]
+                # rospy.logdebug("Coordinate: {}".format(coordinate))
                 self.buiding_locations.append(coordinate)
+                # rospy.logdebug("building_locations1: {}".format(self.buiding_locations))
                 coordinate = [float(item) for item in list_of_contents[i][2].split(";")]
                 z = coordinate[0]
                 coordinate[0] = coordinate[1]
                 coordinate[1] = z
                 coordinate.append(list_of_contents[i][0])
                 self.buiding_locations.append(coordinate)
-
+                # rospy.logdebug("building_locations2: {}".format(self.buiding_locations))
+                # break
             else: 
                 coordinate = [float(item) for item in list_of_contents[i][1].split(";")]
                 z = coordinate[0]
@@ -789,10 +802,74 @@ class Edrone():
                 cell = list_of_contents[i][2]
                 coordinate = [return_rows[cell[1]],return_columns[cell[0]],altitude,list_of_contents[i][0]]
                 self.buiding_locations.append(coordinate)
-        self.targets[2] = [self.location.longitude,self.location.latitude,self.location.altitude]
+        self.targets[2] = [self.location.longitude,self.location.latitude,self.location.altitude]   
         self.set_new_building_as_target()
-        rospy.logdebug("targets : ".format(self.targets))
+        rospy.logdebug("targets : \n{}".format(self.targets))
+        rospy.logdebug("building locations : \n{}".format(self.buiding_locations))
+        delivery = []
+        returns = []
+        for loc in self.buiding_locations:
+            if loc[-1] == "DELIVERY":
+                delivery.append(tuple(loc[:-1]))
+            else :
+                returns.append(tuple(loc[:-1]))
+        rospy.logdebug("Deliveries: \n{}".format(delivery))
+        rospy.logdebug("Returns: \n{}".format(returns))
+        # Local helper functions for scheduler
+        def calcDistance(x2,y2,z2,x1=0,y1=0,z1=0):
+            # calculates distance
+            dist=math.sqrt(pow(x2-x1,2)+pow(y2-y1,2))
+            
+            return dist
 
+        delivery_dict={}
+        return_dict={}
+        new_targets = []
+        def schedular():
+            assert(len(delivery)==len(returns))
+            for i in range(len(delivery)):
+            
+                delivery_dict[delivery[i]]=calcDistance(delivery[i][0],delivery[i][1],delivery[i][2])
+                return_dict[returns[i]]=calcDistance(returns[i][0],returns[i][1],returns[i][2])
+            
+            
+            sorted_deliveries=dict(OrderedDict(sorted(delivery_dict.items(), key=lambda x: x[1])))
+            
+            
+            sorted_distances=list(sorted_deliveries.values())
+            sorted_coordinates=list(sorted_deliveries.keys())
+            print sorted_distances,sorted_coordinates
+            delivery_to_return_coordinates=sorted_coordinates[0]
+            delivery_to_return_distance=1e100
+            
+            for i in delivery:
+                
+                for j in returns:
+                    
+                    current_delivery_to_return_distance=calcDistance(j[0],j[1],j[2],i[0],i[1],i[2])
+                    if current_delivery_to_return_distance < delivery_to_return_distance:
+                        
+                        delivery_to_return_distance=current_delivery_to_return_distance
+                        delivery_to_return_coordinates=j
+                    
+                path_1=delivery_dict[i]
+                # print delivery_to_return_coordinates,return_dict
+                path_2=delivery_to_return_distance+return_dict[delivery_to_return_coordinates]
+                # break
+                #Tolerance = 5 (To maximize distance)
+                if path_1 < path_2:
+                    print i,path_1,path_2
+                    # new_targets.append()
+                    #Chooose Path_1- Back to Origin
+                    #Pass origin coordiantes
+                    
+                else:
+                    print delivery_to_return_coordinates,path_1,path_2
+                    pass
+                    #Choose Path_2-Go to return and then proceed 
+                    #Pass value stored in delivery_to_return_coordinates
+        schedular()   
+        # sys.exit(0)
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -805,11 +882,14 @@ if __name__ == '__main__':
 
     # PID sampling rate
     r = rospy.Rate(1/e_drone.pid_break_time)
-
+    # try :
     while not rospy.is_shutdown():
         #Condition for calling the pid after the target lists are created
         if e_drone.csv_counter == 1:
             # Call pid function
-            e_drone.pid()
+            # e_drone.pid()
+            pass
         # Sleep for specified sampling rate
         r.sleep()
+    # except rospy.ROSException as e:
+    #     rospy.logdebug("Exiting {}".format(e.message))
