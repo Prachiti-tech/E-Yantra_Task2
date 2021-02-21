@@ -118,7 +118,6 @@ class Edrone():
             [0.0, 0.0, 0.0],
             [0.0, 0.0, 0.0],
         ]
-        self.targets =[[72.00021844008124, 18.999888790656602, 21.757981], [72.000156706, 18.999888790656602, 21.757981], [72.000156706, 18.9998373885, 16.757981]]
     
         # Variable to store scanned waypoints
         self.scanned_target = [0.0, 0.0, 0.0]
@@ -444,8 +443,8 @@ class Edrone():
             # In mid air
             elif self.targets_achieved <= self.n:
                 # Specifying the values for R,P,Y
-                self.drone_cmd.rcRoll = self.base_pwm - self.ouput[1]
-                self.drone_cmd.rcPitch = self.base_pwm - self.ouput[0]
+                self.drone_cmd.rcRoll = self.base_pwm - self.ouput[0]
+                self.drone_cmd.rcPitch = self.base_pwm - self.ouput[1]
 
             # If all the waypoints are reached
             elif self.targets_achieved >= self.n+1:
@@ -744,7 +743,6 @@ class Edrone():
                 points[i][2] = alt1
                 self.targets.insert(i+1, points[i][:])
             self.targets[-1][-1] = last_alt
-        print(self.targets)
 
     #Reading coordinates of cells through csv file
     def get_gps_coordinates(self):
