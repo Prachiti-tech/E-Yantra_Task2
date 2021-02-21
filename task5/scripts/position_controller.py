@@ -816,9 +816,9 @@ class Edrone():
         rospy.logdebug("Deliveries: \n{}".format(delivery))
         rospy.logdebug("Returns: \n{}".format(returns))
         # Local helper functions for scheduler
-        def calcDistance(x2,y2,z2,x1=0,y1=0,z1=0):
+        def calcDistance(x2,y2,x1=72.0002184152,y1=18.9998887669):
             # calculates distance
-            dist=math.sqrt(pow(x2-x1,2)+pow(y2-y1,2))
+            dist=math.sqrt(pow(110692.0702932625*(x2-x1),2)+pow(-105292.0089353767*(y2-y1),2))
             
             return dist
 
@@ -829,8 +829,8 @@ class Edrone():
             assert(len(delivery)==len(returns))
             for i in range(len(delivery)):
             
-                delivery_dict[delivery[i]]=calcDistance(delivery[i][0],delivery[i][1],delivery[i][2])
-                return_dict[returns[i]]=calcDistance(returns[i][0],returns[i][1],returns[i][2])
+                delivery_dict[delivery[i]]=calcDistance(delivery[i][0],delivery[i][1])
+                return_dict[returns[i]]=calcDistance(returns[i][0],returns[i][1])
             
             
             sorted_deliveries=dict(OrderedDict(sorted(delivery_dict.items(), key=lambda x: x[1])))
@@ -838,20 +838,19 @@ class Edrone():
             
             sorted_distances=list(sorted_deliveries.values())
             sorted_coordinates=list(sorted_deliveries.keys())
-            print sorted_distances,sorted_coordinates
+            # print sorted_distances,sorted_coordinates
             delivery_to_return_coordinates=sorted_coordinates[0]
             delivery_to_return_distance=1e100
+            print return_dict
             
             for i in delivery:
-                
                 for j in returns:
+                    current_delivery_to_return_distance=calcDistance(j[0],j[1],i[0],i[1])
                     
-                    current_delivery_to_return_distance=calcDistance(j[0],j[1],j[2],i[0],i[1],i[2])
                     if current_delivery_to_return_distance < delivery_to_return_distance:
                         
                         delivery_to_return_distance=current_delivery_to_return_distance
                         delivery_to_return_coordinates=j
-                    
                 path_1=delivery_dict[i]
                 # print delivery_to_return_coordinates,return_dict
                 path_2=delivery_to_return_distance+return_dict[delivery_to_return_coordinates]
@@ -868,6 +867,7 @@ class Edrone():
                     pass
                     #Choose Path_2-Go to return and then proceed 
                     #Pass value stored in delivery_to_return_coordinates
+                delivery_to_return_distance=1e100  
         schedular()   
         # sys.exit(0)
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
