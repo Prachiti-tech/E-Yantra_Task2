@@ -45,7 +45,7 @@ class image_proc():
 
 if __name__ == '__main__':
 	image_proc_obj = image_proc()
-	rate  = rospy.Rate(1.0/0.12)
+	rate  = rospy.Rate(1.0/0.060)
 	while not rospy.is_shutdown():
 		try:
 			image_proc_obj.ScanCode()

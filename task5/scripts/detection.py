@@ -111,7 +111,10 @@ class Marker():
 if __name__ == "__main__" :
     # time.sleep(0.5)
     marker = Marker()
-    rate = rospy.Rate(1)
-    while not rospy.is_shutdown():
-        marker.pub()
-        rate.sleep()
+    rate = rospy.Rate(0.5)
+    try : 
+        while not rospy.is_shutdown():
+            marker.pub()
+            rate.sleep()
+    except rospy.ROSException as e:
+        rospy.logdebug("Exit detection: {}".format(e.message))

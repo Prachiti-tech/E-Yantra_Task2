@@ -209,9 +209,11 @@ if __name__ == '__main__':
 
     # PID sampling rate
     r = rospy.Rate(1/e_drone.pid_break_time)
-
-    while not rospy.is_shutdown():
-        # Calling the pid method
-        e_drone.pid()
-        # Sleeping for specified sample rate
-        r.sleep()
+    try:
+        while not rospy.is_shutdown():
+            # Calling the pid method
+            e_drone.pid()
+            # Sleeping for specified sample rate
+            r.sleep()
+    except rospy.ROSException as e:
+        rospy.logdebug("Exit attitude controller {} ",e.message)
