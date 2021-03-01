@@ -570,7 +570,19 @@ class Edrone():
         self.targets_achieved = 1
 
     # ------------------------------HANDLING OBSTACLES-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+     def orientation(self):
+        long,lat = self.targets[-1][0]-self.targets[0][0],self.targets[-1][1]-self.targets[0][1]
+        degree = math.atan2(long,lat)*180/3.14
+        print(degree)
+        orientation = 0
+        if -45.0 < degree < 45.0:
+            return(2,0,1,3)
+        elif 45.0 < degree < 135.0:
+            return(1,3,2,0)
+        elif -135.0 < degree < -45.0:
+            return(3,1,0,2)
+        elif 135.0 < degree < 180.0 or -180.0 < degree < -135.0:
+            return(0,2,3,1)
     def handle_obstacle_x_y(self):
         """
         Check if obstacle is occured:
@@ -579,11 +591,11 @@ class Edrone():
         if no:
             nothing
         """
-        front_range_finder_avg = (
-            self.range_finder_top_list[0] + self.range_finder_top_list[4])/2
+        LEFT,RIGHT,FRONT,BACK = self.orientation()
+        front_range_finder_avg = self.range_finder_top_list[FRONT]
 
-        left = self.range_finder_top_list[3] < 5 and self.range_finder_top_list[3] > 3
-        right = self.range_finder_top_list[1] < 5 and self.range_finder_top_list[1] > 3
+        left = self.range_finder_top_list[LEFT] < 5 and self.range_finder_top_list[LEFT] > 3
+        right = self.range_finder_top_list[RIGHT] < 5 and self.range_finder_top_list[RIGHT] > 3
         front = front_range_finder_avg < 4 and front_range_finder_avg > 1
 
         # handling obstacle for left range finder
