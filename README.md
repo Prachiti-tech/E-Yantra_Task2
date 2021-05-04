@@ -1,4 +1,12 @@
-# E-YRC Task1
+# E-YANTRA ROBOTICS COMPETITION
+
+<html>
+    <p align="center">
+    <a href="task1A">
+        <img src="https://github.com/Prachiti-tech/E-Yantra_Task2/blob/main/images/eyantra.gif"/>
+    </a>
+    </p>
+</html>
 
 ## Task 1A
 
